@@ -22,6 +22,7 @@ const MSG_INTERVAL = parseInt(args.interval) || 2000; // 每个用户发消息�
 const TEST_DURATION = parseInt(args.duration) || 60000; // 测试时长(ms)
 const ADMIN_USER = args.adminUser || 'admin';
 const ADMIN_PASS = args.adminPass || 'admin123';
+const SKIP_CREATE = args['skip-create'] !== undefined;  // 跳过创建用户和群，复用已有
 
 console.log(`
 ========== 压力测试 ==========
@@ -30,6 +31,7 @@ console.log(`
 群数: ${TOTAL_GROUPS}
 发消息间隔: ${MSG_INTERVAL}ms
 测试时长: ${TEST_DURATION / 1000}s
+跳过创建: ${SKIP_CREATE ? '是（复用已有用户和群）' : '否'}
 ============================
 `);
 
@@ -89,18 +91,22 @@ async function main() {
   const adminToken = adminRes.data.token;
   console.log('  成功');
 
-  console.log(`步骤2: 批量创建 ${TOTAL_USERS} 个测试用户...`);
-  const batch = [];
-  for (let i = 0; i < TOTAL_USERS; i++) {
-    const phone = `138${String(10000000 + i).padStart(8, '0')}`;
-    batch.push({
-      phone,
-      nickname: `压测用户${i}`,
-      password: '123456',
-    });
+  console.log(`步骤2: ${SKIP_CREATE ? '跳过创建用户' : `批量创建 ${TOTAL_USERS} 个测试用户`}...`);
+  if (!SKIP_CREATE) {
+    const batch = [];
+    for (let i = 0; i < TOTAL_USERS; i++) {
+      const phone = `138${String(10000000 + i).padStart(8, '0')}`;
+      batch.push({
+        phone,
+        nickname: `压测用户${i}`,
+        password: '123456',
+      });
+    }
+    const createRes = await request('POST', '/api/admin/users/batch', { users: batch }, adminToken);
+    console.log(`  完成: ${createRes.message || JSON.stringify(createRes)}`);
+  } else {
+    console.log('  使用已有用户（手机号 13800010000 ~ 1380001xxxx，密码 123456）');
   }
-  const createRes = await request('POST', '/api/admin/users/batch', { users: batch }, adminToken);
-  console.log(`  完成: ${createRes.message || JSON.stringify(createRes)}`);
 
   console.log('步骤3: 所有用户登录拿 token...');
   const tokens = [];
@@ -134,17 +140,26 @@ async function main() {
   // 先获取群列表
   const groupsRes = await request('GET', '/api/admin/groups?pageSize=100', null, adminToken);
   let groups = groupsRes.data?.list || [];
-  // 如果群不够，创建
-  while (groups.length < TOTAL_GROUPS) {
-    const idx = groups.length + 1;
-    await request('POST', '/api/admin/groups', {
-      name: `压测群${idx}`,
-      owner_uid: uids[0],
-      isPublic: true,
-    }, adminToken);
-    const gl = await request('GET', '/api/admin/groups?pageSize=100', null, adminToken);
-    groups = gl.data?.list || [];
+
+  if (!SKIP_CREATE) {
+    // 如果群不够，创建
+    while (groups.length < TOTAL_GROUPS) {
+      const idx = groups.length + 1;
+      await request('POST', '/api/admin/groups', {
+        name: `压测群${idx}`,
+        owner_uid: uids[0],
+        isPublic: true,
+      }, adminToken);
+      const gl = await request('GET', '/api/admin/groups?pageSize=100', null, adminToken);
+      groups = gl.data?.list || [];
+    }
   }
+
+  if (groups.length < TOTAL_GROUPS) {
+    console.error(`  错误：只有 ${groups.length} 个群，但需要 ${TOTAL_GROUPS} 个`);
+    process.exit(1);
+  }
+
   const groupIds = groups.slice(0, TOTAL_GROUPS).map(g => g.id);
   console.log(`  使用群: ${groupIds.join(', ')}`);
 

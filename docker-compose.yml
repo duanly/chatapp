@@ -111,6 +111,13 @@ services:
       # 文件夹监控（容器内默认关闭，路径需挂 volume）
       ENABLE_FOLDER_WATCH: "false"
       WATCH_FOLDER: /data/watch
+      # OSS 配置（可选，不配置则用 base64 发图）
+      # OSS_REGION: oss-cn-guangzhou
+      # OSS_BUCKET: your-bucket
+      # OSS_ACCESS_KEY_ID: your-access-key
+      # OSS_ACCESS_KEY_SECRET: your-access-secret
+      # OSS_DOMAIN: https://cdn.example.com
+      # OSS_PREFIX: robot
     depends_on:
       - server
     ports:

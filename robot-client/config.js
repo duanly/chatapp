@@ -35,4 +35,14 @@ module.exports = {
   watchFolder: process.env.WATCH_FOLDER || '/Users/lyelsa/Downloads',
   enableFolderWatch: process.env.ENABLE_FOLDER_WATCH === 'true',
   imageExtensions: [".png",".jpg",".jpeg",".gif",".webp",".bmp"],
+
+  // ===== OSS 配置（可选，不配置则用 base64 发图） =====
+  oss: {
+    region: process.env.OSS_REGION || '',
+    bucket: process.env.OSS_BUCKET || '',
+    accessKeyId: process.env.OSS_ACCESS_KEY_ID || '',
+    accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || '',
+    domain: process.env.OSS_DOMAIN || '',
+    prefix: process.env.OSS_PREFIX || 'robot',
+  },
 };
