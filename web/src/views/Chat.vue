@@ -134,7 +134,7 @@
           :class="{ cooling: quickBtnCooling[idx] }"
           @click="sendQuickNumber(item, idx)"
           @touchstart.stop="onBtnTouchStart(idx)"
-          @touchend.stop="onBtnTouchEnd"
+          @touchend.stop="onBtnTouchEnd($event)"
           @mousedown.stop="onBtnMouseDown(idx)"
           @mouseup.stop="onBtnTouchEnd"
           @mouseleave="onBtnTouchEnd"
@@ -602,7 +602,17 @@ function onBtnMouseDown(idx) {
   onBtnTouchStart(idx);
 }
 
-function onBtnTouchEnd() {
+// 快捷按钮双击缩放拦截（因为 .stop 阻止了冒泡，全局 touchend 拦截收不到事件）
+let lastQuickBtnTouchEnd = 0;
+
+function onBtnTouchEnd(e) {
+  // 双击拦截：300ms 内第二次点击阻止默认行为（防 iOS 双击缩放）
+  const now = Date.now();
+  if (now - lastQuickBtnTouchEnd <= 300) {
+    if (e && e.preventDefault) e.preventDefault();
+  }
+  lastQuickBtnTouchEnd = now;
+
   if (longPressTimer) {
     clearTimeout(longPressTimer);
     longPressTimer = null;
@@ -1707,6 +1717,8 @@ onUnmounted(() => {
   user-select: none;
   transition: all 0.2s ease;
   min-width: 140px;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
 }
 
 .quick-btns.collapsed {
@@ -1782,6 +1794,9 @@ onUnmounted(() => {
   justify-content: center;
   background: #07c160;
   color: #fff;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
   border-radius: 50%;
   font-size: 16px;
   font-weight: 600;
