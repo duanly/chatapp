@@ -151,9 +151,6 @@ function handleSendMessage(socket) {
         socket.to(`group:${groupId}`).emit('new_message', messageData);
         // 也发给自己（其他设备）
         socket.emit('new_message', messageData);
-
-        // 转发给绑定的机器人
-        await forwardToRobots(groupId, messageData);
       }
 
       // 单聊：发给对方（所有设备/标签页）
@@ -165,7 +162,15 @@ function handleSendMessage(socket) {
         socket.emit('new_message', messageData);
       }
 
+      // 先 callback 确认发送成功，避免机器人转发慢导致发送方卡"发送中"
       callback?.({ code: 0, message: '发送成功', data: messageData });
+
+      // 转发给绑定的机器人（异步，不阻塞 callback）
+      if (groupId) {
+        forwardToRobots(groupId, messageData).catch(err => {
+          console.error('[Robot] forward failed:', err.message);
+        });
+      }
     } catch (err) {
       console.error('send_message error:', err);
       callback?.({ code: 500, message: err.message || '发送失败' });

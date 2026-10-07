@@ -1085,7 +1085,7 @@ function sendText() {
     ? { groupId: targetId.value, type: 1, content, mentionUids: mentionUids.value }
     : { toUid: targetId.value, type: 1, content };
 
-  // 记录发送开始时间，确保"发送中"至少显示 300ms
+  // 记录发送开始时间，确保"发送中"至少显示 300ms（避免太快闪一下）
   const startTime = Date.now();
   const minDisplayTime = 300;
 
@@ -1093,7 +1093,7 @@ function sendText() {
     const idx = messages.value.findIndex(m => m._tempId === tempId);
     if (idx < 0) return;
 
-    // 计算还需要等多久才够 300ms
+    // 计算还需要等多久才够最小显示时间
     const elapsed = Date.now() - startTime;
     const waitTime = Math.max(0, minDisplayTime - elapsed);
 
