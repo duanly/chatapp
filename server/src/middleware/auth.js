@@ -15,7 +15,7 @@ async function authMiddleware(req, res, next) {
 
   // 检查用户是否被封禁
   const db = require('../config/db');
-  const userResult = await db.query('SELECT id, uid, status FROM users WHERE uid = $1', [payload.uid]);
+  const userResult = await db.query('SELECT id, uid, status, is_public FROM users WHERE uid = $1', [payload.uid]);
 
   if (userResult.rows.length === 0) {
     return res.status(401).json({ code: 401, message: '用户不存在' });
@@ -25,7 +25,7 @@ async function authMiddleware(req, res, next) {
     return res.status(403).json({ code: 403, message: '账号已被封禁' });
   }
 
-  req.user = payload;
+  req.user = { ...payload, is_public: userResult.rows[0].is_public };
   next();
 }
 

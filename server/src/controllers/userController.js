@@ -110,6 +110,7 @@ async function getUserInfo(req, res) {
       nickname: user.nickname,
       avatar: user.avatar,
       status: user.status,
+      is_public: user.is_public,
     },
   });
 }
@@ -139,18 +140,31 @@ async function searchUsers(req, res) {
   if (!keyword) {
     return res.json({ code: 0, data: [] });
   }
-  const list = await userModel.searchPublic(keyword, page, pageSize);
+  // 公开用户（公众号/机器人）可以搜索所有用户，普通用户只能搜索公开用户
+  let list;
+  if (req.user.is_public) {
+    list = await userModel.search(keyword, page, pageSize);
+  } else {
+    list = await userModel.searchPublic(keyword, page, pageSize);
+  }
   // 排除自己
   const myUid = req.user.uid;
   const filtered = list.filter(u => u.uid !== myUid);
   res.json({ code: 0, data: filtered });
 }
 
-// 获取用户列表（只返回公开用户）
+// 获取用户列表
+// 公开用户（公众号/机器人）返回所有用户，普通用户只返回公开用户
 async function listUsers(req, res) {
-  const list = await userModel.getPublicUsers();
-  // 排除自己
   const myUid = req.user.uid;
+  let list;
+  if (req.user.is_public) {
+    const result = await userModel.list(1, 200);
+    list = result.list;
+  } else {
+    list = await userModel.getPublicUsers();
+  }
+  // 排除自己
   const filtered = list.filter(u => u.uid !== myUid);
   res.json({ code: 0, data: filtered });
 }
