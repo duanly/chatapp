@@ -84,11 +84,14 @@ async function setStatus(id, status) {
 async function getByUser(uid) {
   const result = await db.query(
     `SELECT g.*, gm.role as member_role,
-       CASE WHEN gm.uid IS NOT NULL THEN TRUE ELSE FALSE END as is_member
+       CASE WHEN gm.uid IS NOT NULL THEN TRUE ELSE FALSE END as is_member,
+       (SELECT m.type FROM messages m WHERE m.group_id = g.id ORDER BY m.id DESC LIMIT 1) as last_msg_type,
+       (SELECT m.content FROM messages m WHERE m.group_id = g.id ORDER BY m.id DESC LIMIT 1) as last_msg,
+       (SELECT m.created_at FROM messages m WHERE m.group_id = g.id ORDER BY m.id DESC LIMIT 1) as last_msg_at
      FROM groups g
      LEFT JOIN group_members gm ON g.id = gm.group_id AND gm.uid = $1
      WHERE gm.uid IS NOT NULL OR g.is_public = TRUE
-     ORDER BY g.updated_at DESC`,
+     ORDER BY (SELECT MAX(m.id) FROM messages m WHERE m.group_id = g.id) DESC NULLS LAST, g.updated_at DESC`,
     [uid]
   );
   return result.rows;
