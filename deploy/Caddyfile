@@ -1,12 +1,34 @@
 # ========================================
-# 轻聊 Caddy 配置
+# 轻聊 Caddy 配置 - 单域名版本
 # 放到 /etc/caddy/conf.d/chatapp.conf
-# 或直接写进 /etc/caddy/Caddyfile
 # ========================================
 
-# ===== H5 客户端 =====
 chatapp.yourdomain.com {
-	reverse_proxy localhost:8088
+	# ===== API =====
+	handle /api/* {
+		reverse_proxy localhost:3001
+	}
+
+	# ===== WebSocket =====
+	handle /socket.io/* {
+		reverse_proxy localhost:3001
+	}
+
+	# ===== 上传文件 =====
+	handle /uploads/* {
+		reverse_proxy localhost:3001
+	}
+
+	# ===== 管理后台（/admin/ 前缀） =====
+	# admin 自己已经适配了 /admin/ 路径，直接转发（不去前缀）
+	handle /admin/* {
+		reverse_proxy localhost:8089
+	}
+
+	# ===== H5 客户端（根路径，放最后） =====
+	handle {
+		reverse_proxy localhost:8088
+	}
 
 	# 日志（可选）
 	log {
@@ -14,56 +36,26 @@ chatapp.yourdomain.com {
 	}
 }
 
-# ===== 管理后台 =====
-admin.yourdomain.com {
-	reverse_proxy localhost:8089
-
-	log {
-		output file /var/log/caddy/chatapp-admin.log
-	}
-}
-
-# ===== API + WebSocket =====
-api.yourdomain.com {
-	reverse_proxy localhost:3001
-
-	# Caddy 自动处理 WebSocket，无需额外配置
-
-	log {
-		output file /var/log/caddy/chatapp-api.log
-	}
-}
-
 # ========================================
-# 单域名方案（只有一个域名时用，把上面三个删掉）
+# 多域名版本（不用的话注释掉）
 # ========================================
 # chatapp.yourdomain.com {
-# 	# API
-# 	handle /api/* {
-# 		reverse_proxy localhost:3001
-# 	}
-#
-# 	# WebSocket
-# 	handle /socket.io/* {
-# 		reverse_proxy localhost:3001
-# 	}
-#
-# 	# 上传文件
-# 	handle /uploads/* {
-# 		reverse_proxy localhost:3001
-# 	}
-#
-# 	# 管理后台
-# 	handle /admin/* {
-# 		reverse_proxy localhost:8089
-# 	}
-#
-# 	# H5 客户端（放最后）
-# 	handle {
-# 		reverse_proxy localhost:8088
-# 	}
-#
+# 	reverse_proxy localhost:8088
 # 	log {
 # 		output file /var/log/caddy/chatapp.log
+# 	}
+# }
+#
+# admin.yourdomain.com {
+# 	reverse_proxy localhost:8089
+# 	log {
+# 		output file /var/log/caddy/chatapp-admin.log
+# 	}
+# }
+#
+# api.yourdomain.com {
+# 	reverse_proxy localhost:3001
+# 	log {
+# 		output file /var/log/caddy/chatapp-api.log
 # 	}
 # }

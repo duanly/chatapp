@@ -20,7 +20,7 @@ docker-compose ps
 
 三个服务只监听本地：
 - web → `127.0.0.1:8088`
-- admin → `127.0.0.1:8089`
+- admin → `127.0.0.1:8089`（自带 `/admin/` 前缀）
 - server → `127.0.0.1:3001`
 
 ## 二、配置 Caddy
@@ -33,85 +33,61 @@ cp deploy/Caddyfile /etc/caddy/conf.d/chatapp.conf
 
 ### 2. 修改域名
 
-把 `chatapp.yourdomain.com`、`admin.yourdomain.com`、`api.yourdomain.com` 改成你实际的域名。
+把 `chatapp.yourdomain.com` 改成你实际的域名。
 
 ### 3. 重载 Caddy
 
 ```bash
 systemctl reload caddy
-# 或
-caddy reload --config /etc/caddy/Caddyfile
 ```
 
-## 三、Caddy 配置说明
+## 三、访问地址
 
-### 方案 A：三个子域名（推荐）
+假设域名为 `chatapp.yourdomain.com`：
 
-`deploy/Caddyfile` 默认是这个方案：
+- **H5 客户端**：https://chatapp.yourdomain.com/
+- **管理后台**：https://chatapp.yourdomain.com/admin/
+- **API**：https://chatapp.yourdomain.com/api/v1/...
+- **健康检查**：https://chatapp.yourdomain.com/api/health
 
-- `chatapp.example.com` → H5 客户端（web:8088）
-- `admin.example.com` → 管理后台（admin:8089）
-- `api.example.com` → API + WebSocket（server:3001）
+Caddy 自动申请和续期 HTTPS 证书。
 
-### 方案 B：一个域名 + 路径
+## 四、初始账号
 
-如果只有一个域名，用路径区分：
+- **管理后台**：用户名 `admin`，密码 `admin123`
+  - 登录后请立即修改密码！
 
-```caddyfile
-chatapp.yourdomain.com {
-	# 管理后台
-	handle /admin/* {
-		reverse_proxy localhost:8089
-	}
+- **H5 客户端**：注册账号即可使用
 
-	# API
-	handle /api/* {
-		reverse_proxy localhost:3001
-	}
-
-	# WebSocket
-	handle /socket.io/* {
-		reverse_proxy localhost:3001
-	}
-
-	# 上传文件
-	handle /uploads/* {
-		reverse_proxy localhost:3001
-	}
-
-	# H5 客户端（放最后）
-	handle {
-		reverse_proxy localhost:8088
-	}
-}
-```
-
-## 四、常用命令
+## 五、常用命令
 
 ```bash
-# 重载配置
+# 重载 Caddy 配置
 systemctl reload caddy
 
-# 查看状态
+# 查看 Caddy 状态
 systemctl status caddy
 
-# 查看日志
-journalctl -u caddy -f
+# 查看 Caddy 日志
+journalctl -u caddy -f --since today
 
-# 查看证书
-caddy list-modules | grep tls
+# 查看 Docker 服务日志
+docker-compose logs -f server
+docker-compose logs -f web
+docker-compose logs -f admin
 ```
 
-## 五、WebSocket 说明
+## 六、说明
 
-Caddy 自动识别 WebSocket 连接，不需要额外配置 `Upgrade` / `Connection` header，比 Nginx 方便。
+- **WebSocket**：Caddy 自动识别并处理，无需额外配置
+- **上传大小**：admin 和 web 的 Nginx 已设 20M，Caddy 默认不限制
+- **HTTPS**：Caddy 自动申请 Let's Encrypt 证书，自动续期
 
-## 六、上传大小
+## 七、机器人客户端
 
-Caddy 默认不限制请求体大小，如果需要限制，在 reverse_proxy 前加：
+机器人客户端是桌面应用，不在服务器上跑。
 
-```caddyfile
-request_body {
-	max_size 20MB
-}
-```
+1. 修改 `robot-client/config.js`
+   - `serverUrl`：`https://chatapp.yourdomain.com`（Caddy 统一入口）
+   - `apiKey`：管理后台 → 机器人管理中获取
+2. 本地运行：`npm run app`
