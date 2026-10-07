@@ -59,20 +59,28 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    expose:
-      - "3000"
-
-  nginx:
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile.nginx
-    restart: always
     ports:
-      - "80:80"
-    volumes:
-      - uploads_data:/app/uploads:ro
+      - "3001:3000"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: always
     depends_on:
       - server
+    ports:
+      - "8088:80"
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - server
+    ports:
+      - "8089:80"
 
 volumes:
   postgres_data:

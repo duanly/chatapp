@@ -2,7 +2,7 @@ import axios from 'axios';
 import { ElMessage } from 'element-plus';
 
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/admin',
+  baseURL: '/api/admin',
   timeout: 15000,
 });
 

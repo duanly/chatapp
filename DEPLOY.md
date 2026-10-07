@@ -2,16 +2,15 @@
 
 ## 服务说明
 
-使用 Nginx 统一入口（端口 80），通过路径区分不同服务：
-
-| 路径 | 服务 | 说明 |
+| 服务 | 端口 | 说明 |
 |------|------|------|
-| `/` | web | H5 客户端（用户端） |
-| `/admin/` | admin | 管理后台 |
-| `/api/` | server | 后端 API |
-| `/socket.io/` | server | WebSocket 连接 |
-| 内部 | postgres | PostgreSQL 数据库（不对外暴露） |
-| 内部 | redis | Redis 缓存（不对外暴露） |
+| postgres | 内部（5432） | PostgreSQL 数据库（不对外暴露） |
+| redis | 内部（6379） | Redis 缓存（不对外暴露） |
+| server | 3001 | 后端 API + WebSocket |
+| web | 8088 | H5 客户端（用户端） |
+| admin | 8089 | 管理后台 |
+
+web 和 admin 自带 Nginx 反向代理，API 请求会自动转发到 server。
 
 ## 快速部署
 
@@ -30,7 +29,8 @@ docker-compose up -d --build
 
 # 4. 查看日志
 docker-compose logs -f server
-docker-compose logs -f nginx
+docker-compose logs -f web
+docker-compose logs -f admin
 
 # 5. 停止
 docker-compose down
@@ -40,10 +40,10 @@ docker-compose down
 
 假设服务器 IP 为 `1.2.3.4`：
 
-- **H5 客户端**：http://1.2.3.4/
-- **管理后台**：http://1.2.3.4/admin/
-- **后端 API**：http://1.2.3.4/api/v1/...
-- **健康检查**：http://1.2.3.4/api/health
+- **H5 客户端**：http://1.2.3.4:8088/
+- **管理后台**：http://1.2.3.4:8089/
+- **后端 API**：http://1.2.3.4:3001/api/v1/...
+- **健康检查**：http://1.2.3.4:3001/health
 
 ## 初始账号
 
@@ -77,7 +77,7 @@ OSS_DOMAIN: https://cdn.yourdomain.com   # 自定义域名，可选
 机器人客户端是桌面应用（Electron），不在 Docker 中运行。
 
 1. 修改 `robot-client/config.js`
-   - `serverUrl` 指向服务器地址：`http://服务器IP`（不带端口，走 Nginx 统一入口）
+   - `serverUrl` 指向服务器地址：`http://服务器IP:3001`
    - `apiKey` 在管理后台 → 机器人管理中获取
 2. 运行：`npm start`（终端版）或 `npm run app`（桌面版）
 3. 打包发布：`npm run build:mac` / `npm run build:win`
@@ -90,17 +90,18 @@ docker-compose ps
 
 # 查看服务日志
 docker-compose logs -f server
-docker-compose logs -f nginx
+docker-compose logs -f web
+docker-compose logs -f admin
 docker-compose logs -f postgres
 
 # 重启某个服务
 docker-compose restart server
 
 # 更新代码后重新构建
-docker-compose up -d --build server nginx
+docker-compose up -d --build server web admin
 
-# 只重新构建前端（web + admin）
-docker-compose up -d --build nginx
+# 只重新构建前端
+docker-compose up -d --build web admin
 
 # 重新构建全部
 docker-compose up -d --build
@@ -108,14 +109,20 @@ docker-compose up -d --build
 
 ## WebSocket 说明
 
-Nginx 已配置 WebSocket 代理，支持长连接。相关配置：
-- `proxy_read_timeout 3600s` — 1 小时无数据才断开（配合服务端心跳）
-- `proxy_buffering off` — 关闭缓冲，消息实时到达
-- 心跳间隔：服务端 15s，超时 20s
+- 服务端心跳：15s 间隔，20s 超时
+- 客户端自动重连：指数退避，无限重试
+- web/admin 的 Nginx 已配置 WebSocket 代理（`proxy_read_timeout 3600s`）
 
-## HTTPS 配置（可选）
+## 常见问题
 
-1. 将证书文件放到 `deploy/certs/` 目录下
-2. 修改 `deploy/nginx.conf`，加上 443 server 块和证书配置
-3. `docker-compose.yml` 取消 443 端口注释
-4. 重启 nginx：`docker-compose up -d --build nginx`
+### 上传图片报 413
+Nginx 默认上传限制已设为 20M。如果还不够，修改 `web/nginx.conf` 和 `admin/nginx.conf` 里的 `client_max_body_size`，然后 `docker-compose up -d --build web admin`。
+
+### 上传图片报 403
+检查是否登录态有效，token 是否正确。管理后台的上传走 `/api/admin/upload`，用管理员 token 鉴权。
+
+### 数据库表不存在
+首次部署会自动执行 `migrations/` 目录下的 SQL。如果是升级部署，需要手动执行迁移：
+```bash
+docker-compose exec postgres psql -U chatapp -d chatapp -f /docker-entrypoint-initdb.d/001_init.sql
+```
