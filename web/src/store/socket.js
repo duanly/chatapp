@@ -152,6 +152,9 @@ export const useSocketStore = defineStore('socket', {
 
       socket.on('new_message', (msg) => {
         this.addMessage(msg);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Socket] new_message:', msg.id, msg.group_id ? `group:${msg.group_id}` : `single:${msg.from_uid}→${msg.to_uid}`, msg.content?.slice(0, 30));
+        }
         this._emit('new_message', msg);
       });
 

@@ -1479,18 +1479,53 @@ onMounted(() => {
   });
 
   window.addEventListener('resize', handleResize);
+  // 页面从后台切回前台时，同步一次消息（防止实时推送漏了）
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
   // 用 store 统一的监听方式，自动处理 socket 连接时机
   offNewMessage = socketStore.onNewMessage(onNewMessage);
   offMessageRead = socketStore.onMessageRead(onMessageRead);
   offMessageWithdrawn = socketStore.onMessageWithdrawn(onMessageWithdrawn);
   offReconnect = socketStore.onReconnect(onReconnected);
+
+  // 启动定时同步（兜底）
+  startSyncTimer();
 });
+
+// 页面可见性变化：切回前台时同步消息
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    // 稍微延迟一下，等连接稳定
+    setTimeout(() => {
+      if (messages.value.length > 0 && socketStore.connected) {
+        syncNewMessages().catch(() => {});
+      }
+    }, 500);
+  }
+}
 
 let offNewMessage = null;
 let offMessageRead = null;
 let offMessageWithdrawn = null;
 let offReconnect = null;
+let syncTimer = null;
+
+// 启动定时同步（兜底机制，防止实时推送漏消息）
+function startSyncTimer() {
+  stopSyncTimer();
+  syncTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && socketStore.connected && messages.value.length > 0) {
+      syncNewMessages().catch(() => {});
+    }
+  }, 30000); // 每 30 秒同步一次
+}
+
+function stopSyncTimer() {
+  if (syncTimer) {
+    clearInterval(syncTimer);
+    syncTimer = null;
+  }
+}
 
 // 重连后同步缺失的消息
 async function onReconnected() {
@@ -1548,7 +1583,9 @@ onUnmounted(() => {
   offMessageRead?.();
   offMessageWithdrawn?.();
   offReconnect?.();
+  stopSyncTimer();
   window.removeEventListener('resize', handleResize);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 </script>
 
