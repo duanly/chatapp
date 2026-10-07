@@ -1,0 +1,39 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #ededed;
+  -webkit-font-smoothing: antialiased;
+  color: #111;
+}
+
+body {
+  overflow: hidden;
+}
+
+/* 微信绿主题色 */
+:root {
+  --van-primary-color: #07c160;
+  --van-success-color: #07c160;
+  --van-nav-bar-background: #ededed;
+  --van-nav-bar-text-color: #111;
+  --van-nav-bar-title-text-color: #111;
+  --van-tabbar-background: #f7f7f7;
+  --van-tabbar-item-active-color: #07c160;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
+}

@@ -1,0 +1,99 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const path = require('path');
+const config = require('./config');
+const redis = require('./config/redis');
+const db = require('./config/db');
+const { socketAuthMiddleware } = require('./middleware/auth');
+const robotAuthMiddleware = require('./middleware/robotAuth');
+const socketHandler = require('./socket');
+
+const app = express();
+const server = http.createServer(app);
+
+// Socket.IO
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    credentials: true,
+  },
+  pingInterval: 25000,
+  pingTimeout: 60000,
+  maxHttpBufferSize: 10 * 1024 * 1024, // 10MB，支持大图传输
+});
+
+module.exports.io = io;
+
+// 中间件
+app.set('trust proxy', true); // 信任代理，获取真实 IP
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// 静态文件：上传的文件
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// 健康检查
+app.get('/health', (req, res) => {
+  res.json({ code: 0, message: 'OK', timestamp: Date.now() });
+});
+
+// HTTP 路由
+app.use('/api/v1', require('./routes/user'));
+app.use('/api/v1/groups', require('./routes/group'));
+app.use('/api/v1/upload', require('./routes/upload'));
+app.use('/api/admin', require('./routes/admin'));
+
+// Socket.IO 中间件
+io.use(socketAuthMiddleware);
+
+// 机器人命名空间
+const robotNsp = io.of('/robot');
+robotNsp.use(robotAuthMiddleware);
+
+// 初始化 Socket 事件
+socketHandler.init(io);
+
+// 错误处理
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ code: 500, message: '服务器内部错误' });
+});
+
+// 404
+app.use((req, res) => {
+  res.status(404).json({ code: 404, message: 'Not Found' });
+});
+
+// 启动
+async function start() {
+  try {
+    // SQLite 自动建表（postgres 用 migration）
+    if (config.db.type === 'sqlite') {
+      db.initTables();
+    }
+
+    // 连接 Redis（或内存 mock）
+    await redis.connect();
+
+    // 测试数据库
+    if (config.db.type === 'postgres') {
+      await db.query('SELECT 1');
+      console.log('Database connected');
+    }
+
+    server.listen(config.port, () => {
+      console.log(`Server running on port ${config.port}`);
+      console.log(`Environment: ${config.env}`);
+      console.log(`Database: ${config.db.type || 'sqlite'}`);
+      console.log(`Health check: http://localhost:${config.port}/health`);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+}
+
+start();

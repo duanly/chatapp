@@ -1,0 +1,2 @@
+-- 消息撤回功能
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS withdrawn BOOLEAN DEFAULT FALSE;
