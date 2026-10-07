@@ -1436,11 +1436,49 @@ onMounted(() => {
   offNewMessage = socketStore.onNewMessage(onNewMessage);
   offMessageRead = socketStore.onMessageRead(onMessageRead);
   offMessageWithdrawn = socketStore.onMessageWithdrawn(onMessageWithdrawn);
+  offReconnect = socketStore.onReconnect(onReconnected);
 });
 
 let offNewMessage = null;
 let offMessageRead = null;
 let offMessageWithdrawn = null;
+let offReconnect = null;
+
+// 重连后同步缺失的消息
+async function onReconnected() {
+  if (messages.value.length === 0) {
+    // 还没加载过消息，走正常加载流程
+    loadMessages();
+    return;
+  }
+  // 拉取最后一条消息之后的新消息
+  const lastMsg = messages.value[messages.value.length - 1];
+  if (!lastMsg || !lastMsg.id || String(lastMsg.id).startsWith('temp_')) return;
+
+  try {
+    let newMessages = [];
+    if (chatType.value === 'group') {
+      newMessages = await getGroupMessages(targetId.value, null, 100, lastMsg.id);
+    } else {
+      newMessages = await getSingleMessages(targetId.value, null, 100, lastMsg.id);
+    }
+    if (newMessages.length > 0) {
+      console.log(`[Chat] Reconnect sync: got ${newMessages.length} new messages`);
+      messages.value = [...messages.value, ...newMessages];
+      saveMessagesToCache();
+      // 如果之前在底部，自动滚到底
+      const container = messagesRef.value;
+      if (container) {
+        const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+        if (nearBottom) {
+          scrollToBottom();
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Chat] Reconnect sync failed:', e);
+  }
+}
 
 // 监听路由变化（切换群聊/单聊时重新加载）
 watch(() => route.params.id, (newId) => {
@@ -1479,6 +1517,7 @@ onUnmounted(() => {
   offNewMessage?.();
   offMessageRead?.();
   offMessageWithdrawn?.();
+  offReconnect?.();
   window.removeEventListener('resize', handleResize);
 });
 </script>

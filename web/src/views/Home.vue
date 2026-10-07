@@ -743,12 +743,24 @@ onMounted(() => {
 
   // 用 store 统一的事件监听方式（不管 socket 什么时候连接都能收到）
   offNewMessage = socketStore.onNewMessage(onNewMessage);
+  offReconnect = socketStore.onReconnect(onReconnected);
 });
 
 let offNewMessage = null;
+let offReconnect = null;
+
+// 重连后刷新会话列表和最新消息
+async function onReconnected() {
+  console.log('[Home] Reconnected, refreshing conversations');
+  loadGroups();
+  // 单聊列表也需要更新最后一条消息，单聊的更新靠 onNewMessage 实时推送就够了
+  // 但如果是离线期间的消息，onNewMessage 不会触发，所以需要主动刷新
+  // 简单起见，重新拉一次群列表（含 last_msg）
+}
 
 onUnmounted(() => {
   offNewMessage?.();
+  offReconnect?.();
   stopScan();
 });
 </script>

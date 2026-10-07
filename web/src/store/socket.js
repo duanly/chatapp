@@ -92,6 +92,7 @@ export const useSocketStore = defineStore('socket', {
       if (this._bound || !this.socket) return;
       this._bound = true;
       const socket = this.socket;
+      let isFirstConnect = true;
 
       socket.on('connect', () => {
         console.log('Socket connected:', socket.id);
@@ -100,7 +101,15 @@ export const useSocketStore = defineStore('socket', {
         this.status = 'connected';
         this.reconnectAttempts = 0;
         this.flushPendingMessages();
-        this._emit('connect');
+
+        if (isFirstConnect) {
+          isFirstConnect = false;
+          this._emit('connect');
+        } else {
+          // 重连成功，触发 reconnect 事件
+          console.log('[Socket] Reconnected, syncing messages');
+          this._emit('reconnect');
+        }
       });
 
       socket.on('disconnect', (reason) => {
@@ -206,6 +215,10 @@ export const useSocketStore = defineStore('socket', {
 
     onMessageWithdrawn(callback) {
       return this.on('message_withdrawn', callback);
+    },
+
+    onReconnect(callback) {
+      return this.on('reconnect', callback);
     },
 
     withdrawMessage(msgId, callback) {
