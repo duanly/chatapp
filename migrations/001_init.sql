@@ -122,6 +122,22 @@ CREATE TABLE IF NOT EXISTS user_login_logs (
 
 CREATE INDEX IF NOT EXISTS idx_user_login_logs_uid ON user_login_logs(uid, created_at DESC);
 
+-- 系统设置
+CREATE TABLE IF NOT EXISTS system_settings (
+  id SERIAL PRIMARY KEY,
+  key VARCHAR(50) UNIQUE NOT NULL,
+  value TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 初始默认设置
+INSERT INTO system_settings (key, value) VALUES
+  ('app_name', '轻聊'),
+  ('app_logo', ''),
+  ('app_description', '轻聊 - 简洁的聊天应用')
+ON CONFLICT (key) DO NOTHING;
+
 -- 会话设置（置顶、标星等）
 CREATE TABLE IF NOT EXISTS conversation_settings (
   id BIGSERIAL PRIMARY KEY,

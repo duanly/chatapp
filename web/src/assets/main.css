@@ -11,10 +11,23 @@ html, body, #app {
   background: #ededed;
   -webkit-font-smoothing: antialiased;
   color: #111;
+  /* 禁止双击缩放 */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* 禁止 iOS 双击缩放 */
+/* 禁止 iOS 双击缩放 */
 body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   overflow: hidden;
+}
+
+/* 输入框允许选中 */
+input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* 微信绿主题色 */

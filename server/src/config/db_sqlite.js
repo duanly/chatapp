@@ -153,6 +153,20 @@ function initTables() {
       UNIQUE(uid, conv_type, conv_id)
     );
 
+    CREATE TABLE IF NOT EXISTS system_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT UNIQUE NOT NULL,
+      value TEXT,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 初始默认设置
+    INSERT OR IGNORE INTO system_settings (key, value) VALUES
+      ('app_name', '轻聊'),
+      ('app_logo', ''),
+      ('app_description', '轻聊 - 简洁的聊天应用');
+
     CREATE INDEX IF NOT EXISTS idx_user_login_logs_uid ON user_login_logs(uid, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_conv_settings_uid ON conversation_settings(uid);
 

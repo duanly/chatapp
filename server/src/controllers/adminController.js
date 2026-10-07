@@ -418,6 +418,32 @@ async function importTsddUsers(req, res) {
   res.json({ code: 0, message: '导入完成', data: result });
 }
 
+// 获取系统设置
+async function getSystemSettings(req, res) {
+  const systemSettingModel = require('../models/systemSettingModel');
+  const settings = await systemSettingModel.getAll();
+  res.json({ code: 0, data: settings });
+}
+
+// 更新系统设置
+async function updateSystemSettings(req, res) {
+  const systemSettingModel = require('../models/systemSettingModel');
+  const { app_name, app_logo, app_description } = req.body;
+
+  if (app_name !== undefined) {
+    await systemSettingModel.set('app_name', app_name);
+  }
+  if (app_logo !== undefined) {
+    await systemSettingModel.set('app_logo', app_logo);
+  }
+  if (app_description !== undefined) {
+    await systemSettingModel.set('app_description', app_description);
+  }
+
+  const settings = await systemSettingModel.getAll();
+  res.json({ code: 0, message: '保存成功', data: settings });
+}
+
 // 机器人消息日志
 async function robotMessageLogs(req, res) {
   const { robotId, groupId, direction, page = 1, pageSize = 50 } = req.query;
@@ -454,4 +480,6 @@ module.exports = {
   robotUnbindGroup,
   robotMessageLogs,
   importTsddUsers,
+  getSystemSettings,
+  updateSystemSettings,
 };

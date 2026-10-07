@@ -42,6 +42,12 @@ const routes = [
         component: () => import('@/views/Robots.vue'),
         meta: { title: '机器人管理' },
       },
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('@/views/Settings.vue'),
+        meta: { title: '系统设置' },
+      },
     ],
   },
 ];

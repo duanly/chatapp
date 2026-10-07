@@ -41,4 +41,8 @@ router.post('/users/import/tsdd', adminAuthMiddleware, adminController.importTsd
 // 管理员上传文件（头像等）
 router.post('/upload/:type', adminAuthMiddleware, uploadController.uploadFile);
 
+// 系统设置
+router.get('/settings', adminAuthMiddleware, adminController.getSystemSettings);
+router.put('/settings', adminAuthMiddleware, adminController.updateSystemSettings);
+
 module.exports = router;

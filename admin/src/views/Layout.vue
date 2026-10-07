@@ -29,6 +29,10 @@
           <el-icon><Cpu /></el-icon>
           <span>机器人管理</span>
         </el-menu-item>
+        <el-menu-item index="/settings">
+          <el-icon><Setting /></el-icon>
+          <span>系统设置</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -59,7 +63,7 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-  DataAnalysis, User, ChatDotRound, Document, Cpu, ArrowDown
+  DataAnalysis, User, ChatDotRound, Document, Cpu, Setting, ArrowDown
 } from '@element-plus/icons-vue';
 
 const route = useRoute();

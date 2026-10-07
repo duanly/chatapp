@@ -90,6 +90,14 @@ export function uploadFile(type, formData) {
   });
 }
 
+export function getSystemSettings() {
+  return request.get('/settings');
+}
+
+export function updateSystemSettings(data) {
+  return request.put('/settings', data);
+}
+
 export function importTsddUsers(users) {
   return request.post('/users/import/tsdd', { users });
 }
