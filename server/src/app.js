@@ -44,7 +44,7 @@ app.get('/health', (req, res) => {
 app.use('/api/v1', require('./routes/user'));
 app.use('/api/v1/groups', require('./routes/group'));
 app.use('/api/v1/upload', require('./routes/upload'));
-app.use('/api/system', require('./routes/system'));
+app.use('/api/v1/system', require('./routes/system'));
 app.use('/api/admin', require('./routes/admin'));
 
 // Socket.IO 中间件
