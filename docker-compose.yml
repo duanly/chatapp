@@ -84,6 +84,41 @@ services:
     ports:
       - "8089:80"
 
+  robot-client:
+    build:
+      context: ./robot-client
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      # 轻聊服务器地址（内部直接连 server 服务）
+      SERVER_URL: http://server:3000
+      # 机器人 API Key（在管理后台创建机器人后获取）
+      API_KEY: your_robot_api_key_here
+      # 外部业务服务器 IP
+      BIZ_SERVER_IP: 127.0.0.1
+      # 是否启用业务 WebSocket
+      ENABLE_BIZ_WS: "true"
+      # 是否启用消息转发
+      ENABLE_MESSAGE_FORWARD: "true"
+      # 转发接口路径
+      FORWARD_CHAT_API: /api/chat
+      FORWARD_RECALL_API: /api/recallmsg
+      ADD_PAOCHAT_API: /api/addpaochatuser
+      # 新成员入群自动调用 addpaochatuser
+      ENABLE_ADD_PAOCHAT_USER: "false"
+      # 本地面板端口
+      PANEL_PORT: 7777
+      # 文件夹监控（容器内默认关闭，路径需挂 volume）
+      ENABLE_FOLDER_WATCH: "false"
+      WATCH_FOLDER: /data/watch
+    depends_on:
+      - server
+    ports:
+      - "7777:7777"
+    # 如果需要监控本地文件夹，取消下面注释并修改宿主机路径
+    # volumes:
+    #   - /path/to/watch:/data/watch
+
 volumes:
   postgres_data:
   redis_data:
