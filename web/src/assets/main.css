@@ -2,6 +2,9 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  /* 禁止双击缩放 */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body, #app {
@@ -11,9 +14,6 @@ html, body, #app {
   background: #ededed;
   -webkit-font-smoothing: antialiased;
   color: #111;
-  /* 禁止双击缩放 */
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
 }
 
 /* 禁止 iOS 双击缩放 */
