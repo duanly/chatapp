@@ -43,8 +43,8 @@ export function getUserByUid(uid) {
 }
 
 // 单聊消息历史
-export function getSingleMessages(uid, beforeId, limit = 50) {
-  return request.get(`/user/messages/${uid}`, { params: { beforeId, limit } });
+export function getSingleMessages(uid, beforeId, limit = 50, afterId = null) {
+  return request.get(`/user/messages/${uid}`, { params: { beforeId, limit, afterId } });
 }
 
 // 公共用户列表

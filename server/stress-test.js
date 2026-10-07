@@ -140,6 +140,7 @@ async function main() {
     await request('POST', '/api/admin/groups', {
       name: `压测群${idx}`,
       owner_uid: uids[0],
+      isPublic: true,
     }, adminToken);
     const gl = await request('GET', '/api/admin/groups?pageSize=100', null, adminToken);
     groups = gl.data?.list || [];
@@ -147,17 +148,33 @@ async function main() {
   const groupIds = groups.slice(0, TOTAL_GROUPS).map(g => g.id);
   console.log(`  使用群: ${groupIds.join(', ')}`);
 
+  // 确保所有群都是公开且开门状态，方便压测
+  for (const gid of groupIds) {
+    await request('POST', `/api/admin/groups/${gid}/public`, { isPublic: true }, adminToken);
+    await request('POST', `/api/admin/groups/${gid}/status`, { status: 0 }, adminToken);
+  }
+  console.log('  已设置所有群为公开+开门');
+
   // 用户加入群（平均分配）
+  let joinSuccess = 0;
+  let joinFail = 0;
   for (let i = 0; i < tokens.length; i++) {
     const groupId = groupIds[i % groupIds.length];
     try {
-      await request('POST', `/api/v1/groups/${groupId}/join`, {}, tokens[i]);
-    } catch (e) {}
+      const res = await request('POST', `/api/v1/groups/${groupId}/join`, {}, tokens[i]);
+      if (res.code === 0) {
+        joinSuccess++;
+      } else {
+        joinFail++;
+      }
+    } catch (e) {
+      joinFail++;
+    }
     if ((i + 1) % 100 === 0) {
-      process.stdout.write(`  加群进度: ${i + 1}/${tokens.length}\r`);
+      process.stdout.write(`  加群进度: ${i + 1}/${tokens.length} (成功${joinSuccess}/失败${joinFail})\r`);
     }
   }
-  console.log('\n  完成');
+  console.log(`\n  完成，成功 ${joinSuccess}，失败 ${joinFail}`);
 
   console.log('步骤5: 连接 Socket.IO...');
   startTime = Date.now();
@@ -221,12 +238,18 @@ async function main() {
       // 70% 群消息，30% 单聊
       if (Math.random() < 0.7) {
         const groupId = groupIds[idx % groupIds.length];
-        socket.emit('send_group_msg', {
+        socket.emit('send_message', {
           groupId,
           type: 1,
           content: `[用户${idx}] 压测消息 ${Date.now()}`,
           mentionUids: [],
-        }, () => { msgSent++; });
+        }, (res) => {
+          if (res?.code === 0) {
+            msgSent++;
+          } else {
+            errorCount++;
+          }
+        });
       } else {
         // 随机找一个用户私聊
         const randomIdx = Math.floor(Math.random() * sockets.length);
@@ -236,7 +259,13 @@ async function main() {
             to_uid: targetUid,
             type: 1,
             content: `[用户${idx}] 私聊 ${Date.now()}`,
-          }, () => { msgSent++; });
+          }, (res) => {
+            if (res?.code === 0) {
+              msgSent++;
+            } else {
+              errorCount++;
+            }
+          });
         }
       }
     }, MSG_INTERVAL + Math.floor(Math.random() * 1000));

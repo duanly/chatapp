@@ -14,7 +14,7 @@ async function send({ groupId, fromUid, toUid, type, content, mentionUids = [] }
 }
 
 // 获取群消息历史
-async function getGroupMessages(groupId, beforeId = null, limit = 50) {
+async function getGroupMessages(groupId, beforeId = null, limit = 50, afterId = null) {
   let query = `
     SELECT m.*,
       u.nickname as from_nickname, u.avatar as from_avatar, u.short_no as from_short_no,
@@ -28,8 +28,13 @@ async function getGroupMessages(groupId, beforeId = null, limit = 50) {
   const params = [groupId];
 
   if (beforeId) {
-    query += ` AND m.id < $2`;
     params.push(bigintSafe(beforeId));
+    query += ` AND m.id < $${params.length}`;
+  }
+
+  if (afterId) {
+    params.push(bigintSafe(afterId));
+    query += ` AND m.id > $${params.length}`;
   }
 
   query += ` ORDER BY m.id DESC LIMIT $${params.length + 1}`;
@@ -47,7 +52,7 @@ async function getGroupMessages(groupId, beforeId = null, limit = 50) {
 }
 
 // 获取单聊消息历史
-async function getSingleMessages(uid1, uid2, beforeId = null, limit = 50) {
+async function getSingleMessages(uid1, uid2, beforeId = null, limit = 50, afterId = null) {
   let query = `
     SELECT m.*, u.nickname as from_nickname, u.avatar as from_avatar, u.short_no as from_short_no
     FROM messages m
@@ -58,8 +63,13 @@ async function getSingleMessages(uid1, uid2, beforeId = null, limit = 50) {
   const params = [uid1, uid2];
 
   if (beforeId) {
-    query += ` AND m.id < $3`;
     params.push(bigintSafe(beforeId));
+    query += ` AND m.id < $${params.length}`;
+  }
+
+  if (afterId) {
+    params.push(bigintSafe(afterId));
+    query += ` AND m.id > $${params.length}`;
   }
 
   query += ` ORDER BY m.id DESC LIMIT $${params.length + 1}`;

@@ -528,6 +528,7 @@ async function loadGroups() {
   loading.value = true;
   try {
     groups.value = await getMyGroups();
+    saveGroups();
   } catch (err) {
     console.error(err);
   } finally {
@@ -653,6 +654,17 @@ function loadSingleList() {
   } catch (e) {}
 }
 
+function saveGroups() {
+  localStorage.setItem('groups_list', JSON.stringify(groups.value));
+}
+
+function loadGroupsCache() {
+  try {
+    const saved = localStorage.getItem('groups_list');
+    if (saved) groups.value = JSON.parse(saved);
+  } catch (e) {}
+}
+
 // 收到新消息
 function onNewMessage(msg) {
   const myUid = userStore.userInfo?.uid;
@@ -718,13 +730,16 @@ onMounted(() => {
     socketStore.connect();
   }
 
-  loadGroups();
+  loadGroupsCache(); // 先从本地缓存加载，秒显
   loadSingleList();
   loadUnread();
   loadMentions();
   loadPublicUsers();
   loadConvSettings();
   requestNotificationPermission();
+
+  // 然后从服务端刷新
+  loadGroups();
 
   // 用 store 统一的事件监听方式（不管 socket 什么时候连接都能收到）
   offNewMessage = socketStore.onNewMessage(onNewMessage);

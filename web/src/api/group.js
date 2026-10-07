@@ -21,8 +21,8 @@ export function getGroupMembers(id) {
 }
 
 // 群消息历史
-export function getGroupMessages(id, beforeId, limit = 50) {
-  return request.get(`/groups/${id}/messages`, { params: { beforeId, limit } });
+export function getGroupMessages(id, beforeId, limit = 50, afterId = null) {
+  return request.get(`/groups/${id}/messages`, { params: { beforeId, limit, afterId } });
 }
 
 // 添加成员

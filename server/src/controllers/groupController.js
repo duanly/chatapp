@@ -209,14 +209,14 @@ async function getMembers(req, res) {
 // 获取群消息历史
 async function getMessages(req, res) {
   const { id } = req.params;
-  const { beforeId, limit = 50 } = req.query;
+  const { beforeId, afterId, limit = 50 } = req.query;
 
   const isMember = await groupModel.isMember(id, req.user.uid);
   if (!isMember) {
     return res.json({ code: 403, message: '不是群成员' });
   }
 
-  const messages = await messageModel.getGroupMessages(id, beforeId, limit);
+  const messages = await messageModel.getGroupMessages(id, beforeId, parseInt(limit), afterId);
   res.json({ code: 0, data: messages });
 }
 

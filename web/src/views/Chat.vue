@@ -333,6 +333,61 @@ const userStore = useUserStore();
 const chatType = ref(route.query.type === 'single' ? 'single' : 'group');
 const targetId = ref(route.params.id);
 
+// 消息缓存 key（按用户隔离）
+function getCacheKey() {
+  const prefix = chatType.value === 'group' ? 'g' : 's';
+  const myUid = userStore.userInfo?.uid || 'unknown';
+  return `msg_cache_${myUid}_${prefix}_${targetId.value}`;
+}
+
+// 从本地缓存加载消息
+function loadMessagesFromCache() {
+  try {
+    const key = getCacheKey();
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (Array.isArray(data.messages) && data.messages.length > 0) {
+        messages.value = data.messages;
+        hasMoreMessages.value = data.hasMore !== false;
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
+// 保存消息到本地缓存
+function saveMessagesToCache() {
+  try {
+    const key = getCacheKey();
+    // 最多缓存 200 条，避免 localStorage 爆掉
+    const msgs = messages.value.length > 200
+      ? messages.value.slice(messages.value.length - 200)
+      : messages.value;
+    localStorage.setItem(key, JSON.stringify({
+      messages: msgs,
+      hasMore: hasMoreMessages.value,
+    }));
+  } catch (e) {
+    // 存不下就算了
+  }
+}
+
+// 清除所有消息缓存（退出登录时调用）
+function clearAllMessageCache() {
+  try {
+    const myUid = userStore.userInfo?.uid || '';
+    const prefix = `msg_cache_${myUid}_`;
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(prefix)) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
+}
+
 const messagesRef = ref(null);
 const bottomRef = ref(null);
 const inputText = ref('');
@@ -844,16 +899,44 @@ async function loadChatInfo() {
 async function loadMessages() {
   hasMoreMessages.value = true;
   loadingMore.value = false;
-  if (chatType.value === 'group') {
-    messages.value = await getGroupMessages(targetId.value, null, PAGE_SIZE);
+
+  // 先从本地缓存加载（秒显）
+  const hasCache = loadMessagesFromCache();
+
+  if (hasCache) {
+    // 有缓存：先滚动到底，然后增量拉取新消息
+    scrollToBottom(true);
+    // 增量拉取：只拉取最后一条缓存消息之后的
+    const lastMsg = messages.value[messages.value.length - 1];
+    try {
+      let newMessages = [];
+      if (chatType.value === 'group') {
+        newMessages = await getGroupMessages(targetId.value, null, PAGE_SIZE, lastMsg?.id);
+      } else {
+        newMessages = await getSingleMessages(targetId.value, null, PAGE_SIZE, lastMsg?.id);
+      }
+      if (newMessages.length > 0) {
+        messages.value = [...messages.value, ...newMessages];
+        saveMessagesToCache();
+        scrollToBottom();
+      }
+    } catch (e) {
+      // 拉取失败不影响，用缓存
+    }
   } else {
-    messages.value = await getSingleMessages(targetId.value, null, PAGE_SIZE);
+    // 无缓存：全量拉取最新 50 条
+    if (chatType.value === 'group') {
+      messages.value = await getGroupMessages(targetId.value, null, PAGE_SIZE);
+    } else {
+      messages.value = await getSingleMessages(targetId.value, null, PAGE_SIZE);
+    }
+    // 如果返回的数量少于一页，说明没有更多了
+    if (messages.value.length < PAGE_SIZE) {
+      hasMoreMessages.value = false;
+    }
+    saveMessagesToCache();
+    scrollToBottom(true);
   }
-  // 如果返回的数量少于一页，说明没有更多了
-  if (messages.value.length < PAGE_SIZE) {
-    hasMoreMessages.value = false;
-  }
-  scrollToBottom(true);
 }
 
 // 加载更早的消息
@@ -883,6 +966,9 @@ async function loadMoreMessages() {
 
     // 插入旧消息到前面
     messages.value = [...oldMessages, ...messages.value];
+
+    // 保存到缓存
+    saveMessagesToCache();
 
     // 保持滚动位置不变（不让页面跳动）
     await nextTick();
@@ -1050,6 +1136,7 @@ async function onImageChange(e) {
       setTimeout(() => {
         if (res.code === 0) {
           messages.value.splice(idx, 1, { ...res.data, _sending: false, _failed: false });
+          saveMessagesToCache();
         } else {
           messages.value[idx]._sending = false;
           messages.value[idx]._failed = true;
@@ -1207,6 +1294,7 @@ function onMessageWithdrawn(data) {
   const idx = messages.value.findIndex(m => m.id == data.id);
   if (idx >= 0) {
     messages.value[idx].withdrawn = true;
+    saveMessagesToCache();
   }
 }
 
@@ -1244,6 +1332,7 @@ function onNewMessage(msg) {
 
   messages.value.push(msg);
   scrollToBottom();
+  saveMessagesToCache();
 
   // @ 我：增加未读数
   if (chatType.value === 'group' && !isSelfMsg && isMentionMe(msg)) {

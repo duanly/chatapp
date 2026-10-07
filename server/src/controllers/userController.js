@@ -181,10 +181,10 @@ async function getPublicUsers(req, res) {
 // 单聊消息历史
 async function getSingleMessages(req, res) {
   const { uid } = req.params;
-  const { beforeId, limit = 50 } = req.query;
+  const { beforeId, afterId, limit = 50 } = req.query;
   const myUid = req.user.uid;
 
-  const messages = await messageModel.getSingleMessages(myUid, uid, beforeId, limit);
+  const messages = await messageModel.getSingleMessages(myUid, uid, beforeId, parseInt(limit), afterId);
   res.json({ code: 0, data: messages });
 }
 
