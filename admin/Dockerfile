@@ -1,8 +1,11 @@
 FROM node:18-alpine AS build
+ARG VITE_BASE_PATH=/admin/
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
+ENV VITE_API_BASE_URL=/api/admin
 RUN npm run build
 
 FROM nginx:alpine

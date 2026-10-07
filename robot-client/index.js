@@ -90,7 +90,12 @@ function connectLightChat() {
 
   lightChatSocket = io(`${config.serverUrl}/robot`, {
     auth: { api_key: config.apiKey },
-    transports: ['websocket'],
+    transports: ['websocket', 'polling'], // 先 websocket，失败降级到长轮询
+    reconnection: true,
+    reconnectionDelay: 1000,    // 初始重连延迟 1 秒
+    reconnectionDelayMax: 10000, // 最大重连延迟 10 秒
+    reconnectionAttempts: Infinity, // 无限重连
+    timeout: 20000,
   });
 
   lightChatSocket.on('connect', () => {

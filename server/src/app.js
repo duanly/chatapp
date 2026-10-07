@@ -19,8 +19,8 @@ const io = new Server(server, {
     origin: '*',
     credentials: true,
   },
-  pingInterval: 25000,
-  pingTimeout: 60000,
+  pingInterval: 15000,   // 15秒发一次心跳，更快检测断线
+  pingTimeout: 20000,    // 20秒没响应就认为断线，默认60秒太慢了
   maxHttpBufferSize: 10 * 1024 * 1024, // 10MB，支持大图传输
 });
 
@@ -65,6 +65,14 @@ app.use((err, req, res, next) => {
 // 404
 app.use((req, res) => {
   res.status(404).json({ code: 404, message: 'Not Found' });
+});
+
+// 全局兜底：未捕获的异常和 Promise 拒绝不让进程退出，记日志就行
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
 });
 
 // 启动

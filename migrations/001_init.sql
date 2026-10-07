@@ -122,6 +122,21 @@ CREATE TABLE IF NOT EXISTS user_login_logs (
 
 CREATE INDEX IF NOT EXISTS idx_user_login_logs_uid ON user_login_logs(uid, created_at DESC);
 
+-- 会话设置（置顶、标星等）
+CREATE TABLE IF NOT EXISTS conversation_settings (
+  id BIGSERIAL PRIMARY KEY,
+  uid VARCHAR(64) NOT NULL,
+  conv_type INTEGER NOT NULL,
+  conv_id VARCHAR(64) NOT NULL,
+  is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+  is_stared BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(uid, conv_type, conv_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_settings_uid ON conversation_settings(uid);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_users_uid ON users(uid);
 CREATE INDEX IF NOT EXISTS idx_users_short_no ON users(short_no);

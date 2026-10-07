@@ -141,7 +141,20 @@ function initTables() {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS conversation_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uid TEXT NOT NULL,
+      conv_type INTEGER NOT NULL,
+      conv_id TEXT NOT NULL,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      is_stared INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(uid, conv_type, conv_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_user_login_logs_uid ON user_login_logs(uid, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_conv_settings_uid ON conversation_settings(uid);
 
     CREATE INDEX IF NOT EXISTS idx_users_uid ON users(uid);
     CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
