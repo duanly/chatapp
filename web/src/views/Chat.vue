@@ -29,7 +29,9 @@
         <div class="mention-count">{{ mentionCount }}</div>
       </div>
 
-      <div class="messages" ref="messagesRef">
+      <div class="messages" ref="messagesRef" @scroll="handleScroll">
+        <div v-if="loadingMore" class="load-more-tip">加载中...</div>
+        <div v-else-if="!hasMoreMessages && messages.length > 0" class="load-more-tip">没有更早的消息了</div>
         <div
           v-for="msg in messages"
           :key="msg.id"
@@ -359,6 +361,10 @@ const emojiList = [
 const groupInfo = ref(null);
 const singleUser = ref(null);
 const messages = ref([]);
+const hasMoreMessages = ref(true); // 是否还有更早的消息
+const loadingMore = ref(false);    // 是否正在加载更多
+const PAGE_SIZE = 50;
+const LOAD_MORE_SIZE = 30;
 const peerRead = ref(false);
 
 // @ 功能
@@ -836,12 +842,55 @@ async function loadChatInfo() {
 }
 
 async function loadMessages() {
+  hasMoreMessages.value = true;
+  loadingMore.value = false;
   if (chatType.value === 'group') {
-    messages.value = await getGroupMessages(targetId.value);
+    messages.value = await getGroupMessages(targetId.value, null, PAGE_SIZE);
   } else {
-    messages.value = await getSingleMessages(targetId.value);
+    messages.value = await getSingleMessages(targetId.value, null, PAGE_SIZE);
+  }
+  // 如果返回的数量少于一页，说明没有更多了
+  if (messages.value.length < PAGE_SIZE) {
+    hasMoreMessages.value = false;
   }
   scrollToBottom(true);
+}
+
+// 加载更早的消息
+async function loadMoreMessages() {
+  if (!hasMoreMessages.value || loadingMore.value) return;
+  if (messages.value.length === 0) return;
+
+  loadingMore.value = true;
+  const firstId = messages.value[0].id;
+
+  let oldMessages = [];
+  if (chatType.value === 'group') {
+    oldMessages = await getGroupMessages(targetId.value, firstId, LOAD_MORE_SIZE);
+  } else {
+    oldMessages = await getSingleMessages(targetId.value, firstId, LOAD_MORE_SIZE);
+  }
+
+  if (oldMessages.length === 0 || oldMessages.length < LOAD_MORE_SIZE) {
+    hasMoreMessages.value = false;
+  }
+
+  if (oldMessages.length > 0) {
+    // 记录当前滚动位置和第一条消息的位置
+    const container = messagesRef.value;
+    const prevScrollHeight = container.scrollHeight;
+    const prevScrollTop = container.scrollTop;
+
+    // 插入旧消息到前面
+    messages.value = [...oldMessages, ...messages.value];
+
+    // 保持滚动位置不变（不让页面跳动）
+    await nextTick();
+    const newScrollHeight = container.scrollHeight;
+    container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+  }
+
+  loadingMore.value = false;
 }
 
 function scrollToBottom(smooth = false) {
@@ -852,6 +901,16 @@ function scrollToBottom(smooth = false) {
       messagesRef.value.scrollTop = messagesRef.value.scrollHeight;
     }
   });
+}
+
+// 滚动监听：滚到顶部加载更多
+function handleScroll() {
+  const container = messagesRef.value;
+  if (!container) return;
+  // 距离顶部小于 50px 时加载更多
+  if (container.scrollTop < 50 && hasMoreMessages.value && !loadingMore.value) {
+    loadMoreMessages();
+  }
 }
 
 function sendText() {
@@ -1353,6 +1412,13 @@ onUnmounted(() => {
   padding: 12px;
   box-sizing: border-box;
   will-change: transform;
+}
+
+.load-more-tip {
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+  padding: 10px 0;
 }
 
 .msg-bottom {
