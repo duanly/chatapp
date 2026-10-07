@@ -89,13 +89,14 @@ async function getByUids(uids) {
   return result.rows;
 }
 
-// 搜索用户
-async function search(keyword, page = 1, pageSize = 20) {
+// 搜索公开用户（给普通用户端用）
+async function searchPublic(keyword, page = 1, pageSize = 20) {
   const offset = (page - 1) * pageSize;
   const result = await db.query(
-    `SELECT uid, short_no, phone, nickname, avatar, status, remark, is_public, device_lock, device_id, created_at, last_login_at, last_login_ip
+    `SELECT uid, short_no, nickname, avatar, is_public
      FROM users
-     WHERE nickname LIKE $1 OR phone LIKE $1 OR uid LIKE $1 OR short_no LIKE $1
+     WHERE is_public = TRUE
+       AND (nickname LIKE $1 OR uid LIKE $1 OR short_no LIKE $1)
      ORDER BY created_at DESC
      LIMIT $2 OFFSET $3`,
     [`%${keyword}%`, pageSize, offset]
@@ -103,7 +104,7 @@ async function search(keyword, page = 1, pageSize = 20) {
   return result.rows;
 }
 
-// 分页获取用户列表
+// 分页获取用户列表（管理后台用，返回全部字段）
 async function list(page = 1, pageSize = 20) {
   const offset = (page - 1) * pageSize;
   const result = await db.query(
@@ -189,6 +190,7 @@ module.exports = {
   updateLastLogin,
   getByUids,
   search,
+  searchPublic,
   list,
   getPublicUsers,
   setPublic,

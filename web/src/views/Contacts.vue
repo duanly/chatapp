@@ -5,7 +5,7 @@
     <div class="search-wrap">
       <van-search
         v-model="keyword"
-        placeholder="搜索手机号/昵称/UID/ID"
+        placeholder="搜索公众号/群"
         shape="round"
         @search="loadList"
         @clear="loadList"
@@ -16,7 +16,7 @@
       <van-empty v-if="allItems.length === 0 && !loading" description="暂无联系人" />
 
       <!-- 公共群 -->
-      <template v-if="!keyword && publicGroups.length > 0">
+      <template v-if="publicGroups.length > 0">
         <div class="section-title">公共群</div>
         <div
           v-for="g in publicGroups"
@@ -37,7 +37,7 @@
       </template>
 
       <!-- 公共用户/公众号 -->
-      <template v-if="!keyword && publicUsers.length > 0">
+      <template v-if="publicUsers.length > 0">
         <div class="section-title">公众号</div>
         <div
           v-for="u in publicUsers"
@@ -51,28 +51,7 @@
               {{ u.nickname }}
               <van-tag type="success" size="mini">公众号</van-tag>
             </div>
-            <div class="user-phone">{{ u.phone || u.short_no || '' }}</div>
-          </div>
-          <van-icon name="chat-o" size="20" color="#1989fa" />
-        </div>
-      </template>
-
-      <!-- 普通用户 -->
-      <template v-if="normalUsers.length > 0">
-        <div class="section-title" v-if="!keyword">我的好友</div>
-        <div
-          v-for="user in normalUsers"
-          :key="user.uid"
-          class="user-item"
-          @click="startChat(user)"
-        >
-          <van-image round width="44" height="44" :src="user.avatar || defaultAvatar" />
-          <div class="user-info">
-            <div class="user-name">
-              {{ user.nickname }}
-              <span v-if="user.short_no" class="user-shortno">{{ user.short_no }}</span>
-            </div>
-            <div class="user-phone">{{ user.phone }}</div>
+            <div class="user-phone">{{ u.short_no || '' }}</div>
           </div>
           <van-icon name="chat-o" size="20" color="#1989fa" />
         </div>
@@ -90,7 +69,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { searchUsers, getAllUsers, getPublicUsers } from '@/api/user';
+import { searchUsers, getPublicUsers } from '@/api/user';
 import { getMyGroups } from '@/api/group';
 import { useUserStore } from '@/store/user';
 
@@ -99,43 +78,36 @@ const userStore = useUserStore();
 
 const active = ref(1);
 const keyword = ref('');
-const allUsers = ref([]);
 const publicUsers = ref([]);
 const publicGroups = ref([]);
 const loading = ref(false);
 const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGRlZnM+PHN0eWxlPi5he2ZpbGw6I2VlZTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImEiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjgiLz48dGV4dCB4PSIyNCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPu+4lTwvdGV4dD48L3N2Zz4=';
 const defaultGroupAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGRlZnM+PHN0eWxlPi5he2ZpbGw6I2VlZTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImEiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjgiLz48dGV4dCB4PSIyNCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPv+4kTwvdGV4dD48L3N2Zz4=';
 
-// 普通用户（排除公共用户和自己）
-const normalUsers = computed(() => {
-  const myUid = userStore.userInfo?.uid;
-  if (keyword.value.trim()) {
-    // 搜索模式：所有匹配的用户
-    return allUsers.value.filter(u => u.uid !== myUid);
-  }
-  return allUsers.value.filter(u => u.uid !== myUid && !u.is_public);
-});
-
 const allItems = computed(() => {
-  return [...publicGroups.value, ...publicUsers.value, ...normalUsers.value];
+  return [...publicGroups.value, ...publicUsers.value];
 });
 
 async function loadList() {
   loading.value = true;
   try {
     if (keyword.value.trim()) {
-      // 搜索模式：搜索所有用户
-      allUsers.value = await searchUsers(keyword.value.trim());
-      publicUsers.value = [];
-      publicGroups.value = [];
+      // 搜索模式：只搜公开用户
+      const kw = keyword.value.trim();
+      const [users, groups] = await Promise.all([
+        searchUsers(kw),
+        getMyGroups(),
+      ]);
+      publicUsers.value = users;
+      publicGroups.value = groups.filter(g =>
+        g.is_public && g.name.includes(kw)
+      );
     } else {
-      // 正常模式：加载公共群 + 公共用户 + 所有用户
-      const [users, pubUsers, groups] = await Promise.all([
-        getAllUsers(),
+      // 正常模式：加载公共群 + 公共用户
+      const [pubUsers, groups] = await Promise.all([
         getPublicUsers(),
         getMyGroups(),
       ]);
-      allUsers.value = users;
       publicUsers.value = pubUsers;
       // 只显示公共群在联系人里
       publicGroups.value = groups.filter(g => g.is_public);
@@ -239,15 +211,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.user-shortno {
-  font-size: 11px;
-  color: #07c160;
-  background: #e8f8ef;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: normal;
 }
 
 .user-phone {

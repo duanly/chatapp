@@ -136,15 +136,23 @@ async function updateUserInfo(req, res) {
 // 搜索用户
 async function searchUsers(req, res) {
   const { keyword, page = 1, pageSize = 20 } = req.query;
-  const list = await userModel.search(keyword, page, pageSize);
-  res.json({ code: 0, data: list });
+  if (!keyword) {
+    return res.json({ code: 0, data: [] });
+  }
+  const list = await userModel.searchPublic(keyword, page, pageSize);
+  // 排除自己
+  const myUid = req.user.uid;
+  const filtered = list.filter(u => u.uid !== myUid);
+  res.json({ code: 0, data: filtered });
 }
 
-// 获取用户列表（全部，前 200 个，方便测试用）
+// 获取用户列表（只返回公开用户）
 async function listUsers(req, res) {
-  const { pageSize = 200 } = req.query;
-  const result = await userModel.list(1, pageSize);
-  res.json({ code: 0, data: result.list });
+  const list = await userModel.getPublicUsers();
+  // 排除自己
+  const myUid = req.user.uid;
+  const filtered = list.filter(u => u.uid !== myUid);
+  res.json({ code: 0, data: filtered });
 }
 
 // 获取公共用户列表
