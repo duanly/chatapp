@@ -361,9 +361,9 @@ function loadMessagesFromCache() {
 function saveMessagesToCache() {
   try {
     const key = getCacheKey();
-    // 最多缓存 200 条，避免 localStorage 爆掉
-    const msgs = messages.value.length > 200
-      ? messages.value.slice(messages.value.length - 200)
+    // 最多缓存 MAX_CACHE_SIZE 条，保留最新的
+    const msgs = messages.value.length > MAX_CACHE_SIZE
+      ? messages.value.slice(messages.value.length - MAX_CACHE_SIZE)
       : messages.value;
     localStorage.setItem(key, JSON.stringify({
       messages: msgs,
@@ -420,6 +420,8 @@ const hasMoreMessages = ref(true); // 是否还有更早的消息
 const loadingMore = ref(false);    // 是否正在加载更多
 const PAGE_SIZE = 50;
 const LOAD_MORE_SIZE = 30;
+const SYNC_BATCH_SIZE = 200; // 增量同步每次拉的条数
+const MAX_CACHE_SIZE = 500;  // 本地最多缓存的消息数
 const peerRead = ref(false);
 
 // @ 功能
@@ -914,27 +916,15 @@ async function loadMessages() {
   const hasCache = loadMessagesFromCache();
 
   if (hasCache) {
-    // 有缓存：先滚动到底，然后增量拉取新消息
+    // 有缓存：先滚动到底，然后增量拉取所有新消息
     scrollToBottom(true);
-    // 增量拉取：只拉取最后一条缓存消息之后的
-    const lastMsg = messages.value[messages.value.length - 1];
     try {
-      let newMessages = [];
-      if (chatType.value === 'group') {
-        newMessages = await getGroupMessages(targetId.value, null, PAGE_SIZE, lastMsg?.id);
-      } else {
-        newMessages = await getSingleMessages(targetId.value, null, PAGE_SIZE, lastMsg?.id);
-      }
-      if (newMessages.length > 0) {
-        messages.value = [...messages.value, ...newMessages];
-        saveMessagesToCache();
-        scrollToBottom();
-      }
+      await syncNewMessages();
     } catch (e) {
       // 拉取失败不影响，用缓存
     }
   } else {
-    // 无缓存：全量拉取最新 50 条
+    // 无缓存：全量拉取最新 PAGE_SIZE 条
     if (chatType.value === 'group') {
       messages.value = await getGroupMessages(targetId.value, null, PAGE_SIZE);
     } else {
@@ -947,6 +937,55 @@ async function loadMessages() {
     saveMessagesToCache();
     scrollToBottom(true);
   }
+}
+
+// 增量同步：拉取最后一条本地消息之后的所有新消息（循环拉直到拉完）
+async function syncNewMessages() {
+  if (messages.value.length === 0) return 0;
+  const lastMsg = messages.value[messages.value.length - 1];
+  if (!lastMsg?.id || String(lastMsg.id).startsWith('temp_')) return 0;
+
+  let afterId = lastMsg.id;
+  let totalNew = 0;
+  let loopCount = 0;
+  const MAX_LOOPS = 20; // 最多 20 轮 = 4000 条，防止死循环
+
+  while (loopCount < MAX_LOOPS) {
+    loopCount++;
+    let batch = [];
+    if (chatType.value === 'group') {
+      batch = await getGroupMessages(targetId.value, null, SYNC_BATCH_SIZE, afterId);
+    } else {
+      batch = await getSingleMessages(targetId.value, null, SYNC_BATCH_SIZE, afterId);
+    }
+    if (batch.length === 0) break;
+
+    // 去重：过滤掉已经有的消息
+    const existingIds = new Set(messages.value.map(m => String(m.id)));
+    const newMsgs = batch.filter(m => !existingIds.has(String(m.id)));
+    if (newMsgs.length === 0) break;
+
+    messages.value = [...messages.value, ...newMsgs];
+    totalNew += newMsgs.length;
+    afterId = newMsgs[newMsgs.length - 1].id;
+
+    // 如果这一批没拉满，说明到末尾了
+    if (batch.length < SYNC_BATCH_SIZE) break;
+  }
+
+  if (totalNew > 0) {
+    saveMessagesToCache();
+    // 如果之前在底部附近，自动滚到底
+    const container = messagesRef.value;
+    if (container) {
+      const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      if (nearBottom) {
+        scrollToBottom();
+      }
+    }
+  }
+
+  return totalNew;
 }
 
 // 加载更早的消息
@@ -1325,17 +1364,26 @@ function onNewMessage(msg) {
 
   if (!isCurrentChat) return;
 
+  // 去重：已经有这条消息了就跳过（重连同步和实时推送可能重复）
+  const msgId = String(msg.id);
+  const existIdx = messages.value.findIndex(m => String(m.id) === msgId);
+  if (existIdx >= 0) {
+    // 如果本地这条是发送中/失败状态，用新的覆盖
+    if (messages.value[existIdx]._sending || messages.value[existIdx]._failed) {
+      messages.value.splice(existIdx, 1, { ...msg, _sending: false, _failed: false });
+      saveMessagesToCache();
+    }
+    return;
+  }
+
   // 如果是自己发的消息，检查有没有临时消息（发送中的），有就替换掉，避免重复
   if (isSelfMsg) {
-    // 先按 id 精确匹配（已经替换过的情况）
-    const existIdx = messages.value.findIndex(m => m.id === msg.id);
-    if (existIdx >= 0) return;
-
     // 再找发送中的同类型消息（图片可能 content 不一样，用 type 匹配）
     const tempIdx = messages.value.findIndex(m => m._sending && m.type === msg.type);
     if (tempIdx >= 0) {
       messages.value.splice(tempIdx, 1, { ...msg, _sending: false, _failed: false });
       scrollToBottom();
+      saveMessagesToCache();
       return;
     }
   }
@@ -1451,30 +1499,12 @@ async function onReconnected() {
     loadMessages();
     return;
   }
-  // 拉取最后一条消息之后的新消息
   const lastMsg = messages.value[messages.value.length - 1];
   if (!lastMsg || !lastMsg.id || String(lastMsg.id).startsWith('temp_')) return;
 
   try {
-    let newMessages = [];
-    if (chatType.value === 'group') {
-      newMessages = await getGroupMessages(targetId.value, null, 100, lastMsg.id);
-    } else {
-      newMessages = await getSingleMessages(targetId.value, null, 100, lastMsg.id);
-    }
-    if (newMessages.length > 0) {
-      console.log(`[Chat] Reconnect sync: got ${newMessages.length} new messages`);
-      messages.value = [...messages.value, ...newMessages];
-      saveMessagesToCache();
-      // 如果之前在底部，自动滚到底
-      const container = messagesRef.value;
-      if (container) {
-        const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-        if (nearBottom) {
-          scrollToBottom();
-        }
-      }
-    }
+    const count = await syncNewMessages();
+    console.log(`[Chat] Reconnect sync: got ${count} new messages`);
   } catch (e) {
     console.error('[Chat] Reconnect sync failed:', e);
   }
