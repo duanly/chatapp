@@ -19,8 +19,8 @@ const io = new Server(server, {
     origin: '*',
     credentials: true,
   },
-  pingInterval: 15000,   // 15秒发一次心跳，更快检测断线
-  pingTimeout: 20000,    // 20秒没响应就认为断线，默认60秒太慢了
+  pingInterval: 25000,   // 25秒心跳一次，移动网络下更稳（NAT 超时一般 60s+）
+  pingTimeout: 35000,    // 35秒没响应才认为断线，给网络抖动留余量
   maxHttpBufferSize: 10 * 1024 * 1024, // 10MB，支持大图传输
 });
 

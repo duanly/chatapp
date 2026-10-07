@@ -18,12 +18,12 @@ export const useSocketStore = defineStore('socket', {
     connected: false,
     connecting: false,
     reconnectAttempts: 0,
-    reconnectMaxAttempts: 30,
     status: 'disconnected', // disconnected / connecting / connected / reconnecting / failed
     messages: {}, // key -> [messages]
     pendingMessages: [], // 断线期间待发送的消息
     _listeners: { new_message: [], message_read: [], message_withdrawn: [], connect: [], disconnect: [] },
     _bound: false,
+    _networkBound: false,
   }),
 
   actions: {
@@ -45,16 +45,47 @@ export const useSocketStore = defineStore('socket', {
         },
         transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionDelay: 800,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: this.reconnectMaxAttempts,
-        timeout: 15000,
+        reconnectionDelay: 500,       // 第一次重连等 500ms
+        reconnectionDelayMax: 10000,   // 最大重连间隔 10s
+        randomizationFactor: 0.5,      // 随机抖动，避免风暴
+        reconnectionAttempts: Infinity, // 无限重试
+        timeout: 10000,                 // 连接超时 10s
       });
 
       // 绑定全局事件（只绑一次）
       this._bindEvents();
+      // 绑定网络状态和可见性监听（只绑一次）
+      this._bindNetworkListeners();
 
       return this.socket;
+    },
+
+    _bindNetworkListeners() {
+      if (this._networkBound) return;
+      this._networkBound = true;
+
+      // 网络从离线变在线时，主动触发重连
+      window.addEventListener('online', () => {
+        console.log('[Socket] Network online, triggering reconnect');
+        if (this.socket && !this.connected) {
+          // socket.io 内部有重连机制，但在线时可以手动加速
+          this.socket.io.connect();
+        } else if (!this.socket) {
+          this.connect();
+        }
+      });
+
+      // 页面从后台切回前台时，检查连接状态
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          console.log('[Socket] Page visible, checking connection');
+          if (this.socket && !this.connected) {
+            this.socket.io.connect();
+          } else if (!this.socket && useUserStore().token) {
+            this.connect();
+          }
+        }
+      });
     },
 
     _bindEvents() {
@@ -104,9 +135,10 @@ export const useSocketStore = defineStore('socket', {
       });
 
       socket.on('reconnect_failed', () => {
-        console.error('Socket reconnect failed');
-        this.status = 'failed';
-        this.connecting = false;
+        console.error('Socket reconnect failed, will keep retrying');
+        // 不进入 failed 状态，保持 reconnecting，让内部机制继续重试
+        this.status = 'reconnecting';
+        this.connecting = true;
       });
 
       socket.on('new_message', (msg) => {
