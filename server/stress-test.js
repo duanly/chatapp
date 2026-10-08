@@ -42,6 +42,13 @@ let msgSent = 0;
 let msgReceived = 0;
 let errorCount = 0;
 let startTime = 0;
+// 错误统计（按错误信息聚合，最多记 20 种）
+const errorMap = new Map();
+function recordError(msg) {
+  errorCount++;
+  const key = msg || 'unknown';
+  errorMap.set(key, (errorMap.get(key) || 0) + 1);
+}
 
 // ========== HTTP 工具 ==========
 function request(method, path, data, token) {
@@ -262,7 +269,7 @@ async function main() {
           if (res?.code === 0) {
             msgSent++;
           } else {
-            errorCount++;
+            recordError(`群聊: ${res?.message || 'code=' + res?.code}`);
           }
         });
       } else {
@@ -278,7 +285,7 @@ async function main() {
             if (res?.code === 0) {
               msgSent++;
             } else {
-              errorCount++;
+              recordError(`单聊: ${res?.message || 'code=' + res?.code}`);
             }
           });
         }
@@ -307,6 +314,17 @@ function printStats() {
   接收消息: ${msgReceived} (${(msgReceived / elapsed).toFixed(1)}/s)
   错误: ${errorCount}
 `);
+  if (errorCount > 0 && errorMap.size > 0) {
+    console.log('  错误分布:');
+    const sorted = [...errorMap.entries()].sort((a, b) => b[1] - a[1]);
+    for (const [msg, count] of sorted.slice(0, 10)) {
+      console.log(`    ${count}次 - ${msg}`);
+    }
+    if (sorted.length > 10) {
+      console.log(`    ... 还有 ${sorted.length - 10} 种错误`);
+    }
+    console.log('');
+  }
 }
 
 main().catch(err => {

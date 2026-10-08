@@ -43,7 +43,7 @@ export const useSocketStore = defineStore('socket', {
           token: userStore.token,
           device_id: deviceId,
         },
-        transports: ['websocket', 'polling'],
+        transports: ['websocket'],
         reconnection: true,
         reconnectionDelay: 500,       // 第一次重连等 500ms
         reconnectionDelayMax: 10000,   // 最大重连间隔 10s

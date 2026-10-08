@@ -726,20 +726,26 @@ onMounted(() => {
     return;
   }
 
-  if (!socketStore.connected) {
-    socketStore.connect();
-  }
-
-  loadGroupsCache(); // 先从本地缓存加载，秒显
+  // 先从本地缓存加载，秒显（不依赖网络）
+  loadGroupsCache();
   loadSingleList();
   loadUnread();
   loadMentions();
-  loadPublicUsers();
-  loadConvSettings();
+
   requestNotificationPermission();
 
-  // 然后从服务端刷新
-  loadGroups();
+  // 等一帧再发网络请求，避免弱网下首屏卡顿
+  requestAnimationFrame(() => {
+    // 后台刷新列表
+    loadGroups();
+    loadPublicUsers();
+    loadConvSettings();
+
+    // Socket 连接也延后，不阻塞首屏
+    if (!socketStore.connected) {
+      socketStore.connect();
+    }
+  });
 
   // 用 store 统一的事件监听方式（不管 socket 什么时候连接都能收到）
   offNewMessage = socketStore.onNewMessage(onNewMessage);
