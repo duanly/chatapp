@@ -179,6 +179,13 @@ function initTables() {
     CREATE INDEX IF NOT EXISTS idx_conversations_uid ON conversations(uid);
   `);
 
+  // 迁移：补字段（SQLite 不支持 IF NOT EXISTS 加列，忽略错误）
+  try {
+    db.prepare(`ALTER TABLE messages ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0`).run();
+  } catch (e) {
+    // 字段已存在，忽略
+  }
+
   console.log('Database tables initialized');
 }
 

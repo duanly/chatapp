@@ -2,7 +2,7 @@
   <div class="home-page">
     <van-nav-bar title="消息" fixed>
       <template #right>
-        <van-icon name="plus" size="20" @click="showPlusMenu = true" />
+        <van-icon name="plus" size="30" @click="showPlusMenu = true" />
       </template>
     </van-nav-bar>
 
@@ -31,7 +31,7 @@
           class="search-item"
           @click="startSingleChat(u)"
         >
-          <van-image round width="40" height="40" :src="u.avatar || defaultAvatar" />
+          <van-image round width="40" height="40" :src="userAvatar(u)" />
           <div class="search-info">
             <div class="search-name">{{ u.nickname }}</div>
             <div class="search-phone">{{ u.phone }}</div>
@@ -52,11 +52,14 @@
         :key="item.key"
         class="chat-item"
         :class="{ pinned: item.is_pinned }"
-        @click="openConversation(item)"
+        @click="onItemClick(item)"
         @contextmenu.prevent="showActionMenu(item)"
+        @touchstart="onItemTouchStart(item)"
+        @touchend="onItemTouchEnd"
+        @touchmove="onItemTouchMove"
       >
         <div class="avatar-wrap">
-          <van-image :src="item.avatar || defaultAvatar" round width="48" height="48" />
+          <van-image :src="convAvatar(item)" round width="48" height="48" />
           <span v-if="item.unread > 0" class="badge">
             {{ item.unread > 99 ? '99+' : item.unread }}
           </span>
@@ -67,13 +70,29 @@
             <span class="name">
               {{ item.name }}
               <van-tag v-if="item.is_public" type="success" size="mini" style="margin-left: 4px">公共</van-tag>
+              <van-tag v-if="item.type === 'group' && item.status === 1" type="danger" size="mini" style="margin-left: 4px">已关门</van-tag>
             </span>
             <div class="right-col">
+              <van-icon
+                name="ellipsis"
+                class="more-btn"
+                size="18"
+                color="#999"
+                @click.stop="showActionMenu(item)"
+              />
               <span v-if="item.mentionCount > 0" class="mention-dot">@</span>
               <span class="time">{{ formatTime(item.last_msg_at) }}</span>
             </div>
           </div>
-          <div class="last-msg">{{ item.last_msg || '暂无消息' }}</div>
+          <div class="last-msg">
+            <template v-if="item.last_msg_type === 2 && item.last_msg">
+              <img :src="item.last_msg" class="last-msg-img" />
+              <span class="last-msg-text">[图片]</span>
+            </template>
+            <template v-else>
+              {{ item.last_msg || '暂无消息' }}
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -136,23 +155,23 @@
       </div>
     </van-dialog>
 
-    <van-tabbar v-model="active" active-color="#1989fa">
-      <van-tabbar-item icon="chat-o">
+    <van-tabbar route active-color="#07c160">
+      <van-tabbar-item icon="chat-o" to="/">
         消息
         <template #dot v-if="totalUnread > 0">
           <span class="tabbar-badge">{{ totalUnread > 99 ? '99+' : totalUnread }}</span>
         </template>
       </van-tabbar-item>
-      <van-tabbar-item icon="friends-o" @click="$router.push('/contacts')">联系人</van-tabbar-item>
-      <van-tabbar-item icon="user-o" @click="$router.push('/profile')">我的</van-tabbar-item>
+      <van-tabbar-item icon="friends-o" to="/contacts">联系人</van-tabbar-item>
+      <van-tabbar-item icon="user-o" to="/profile">我的</van-tabbar-item>
     </van-tabbar>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
-import { getMyGroups, getGroupByInviteCode, joinGroupByInviteCode } from '@/api/group';
+import { getMyGroups, getGroupByInviteCode, joinGroupByInviteCode, getGroupInfo } from '@/api/group';
 import {
   searchUsers,
   getPublicUsers,
@@ -162,12 +181,35 @@ import {
 } from '@/api/user';
 import { useSocketStore } from '@/store/socket';
 import { useUserStore } from '@/store/user';
-import { showToast, showConfirmDialog } from 'vant';
+import { showConfirmDialog } from 'vant';
+import 'vant/es/dialog/style';
+import { showToast } from '@/utils/toast';
+import { getAvatar } from '@/utils/avatar';
 import jsQR from 'jsqr';
+
+// 判断是否是图片 URL
+function isImageUrl(str) {
+  if (!str || typeof str !== 'string') return false;
+  // base64 图片
+  if (str.startsWith('data:image/')) return true;
+  // blob URL
+  if (str.startsWith('blob:')) return true;
+  // http(s) URL + 图片后缀
+  if (/^https?:\/\//.test(str)) {
+    return /\.(jpg|jpeg|png|gif|webp|bmp|svg|ico)(\?.*)?$/i.test(str);
+  }
+  // 相对路径 /uploads/...
+  if (str.startsWith('/uploads/') && /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(str)) {
+    return true;
+  }
+  return false;
+}
 
 const router = useRouter();
 const socketStore = useSocketStore();
 const userStore = useUserStore();
+
+defineOptions({ name: 'Home' });
 
 const active = ref(0);
 const groups = ref([]);
@@ -175,7 +217,14 @@ const singleList = ref([]);
 const publicUsers = ref([]); // 公共用户列表
 const convSettings = ref([]); // 会话设置列表
 const loading = ref(false);
-const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGRlZnM+PHN0eWxlPi5he2ZpbGw6I2VlZTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImEiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjgiLz48dGV4dCB4PSIyNCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPu+4lTwvdGV4dD48L3N2Zz4=';
+
+// 头像：有图用图，无图用文字头像
+function userAvatar(u) {
+  return getAvatar(u?.avatar, u?.nickname || u?.name);
+}
+function convAvatar(item) {
+  return getAvatar(item?.avatar, item?.name);
+}
 
 const showSearch = ref(false);
 const searchKeyword = ref('');
@@ -316,8 +365,9 @@ const actionMenuActions = computed(() => {
   const isPinned = currentConv.value.is_pinned;
   const isStared = currentConv.value.is_stared;
   return [
-    { name: isPinned ? '取消置顶' : '置顶', key: 'pin' },
+    { name: isPinned ? '取消置顶' : '置顶聊天', key: 'pin' },
     { name: isStared ? '取消标星' : '标星', key: 'star' },
+    { name: '清空聊天记录', key: 'clear', color: '#ee0a24' },
   ];
 });
 
@@ -342,12 +392,14 @@ const allConversations = computed(() => {
       name: g.name,
       avatar: g.avatar,
       last_msg: g.last_msg || '',
+      last_msg_type: g.last_msg_type || (isImageUrl(g.last_msg) ? 2 : 1),
       last_msg_at: g.last_msg_at || g.created_at,
       unread: unreadMap.value[key] || 0,
       mentionCount: mentionMap.value[key] || 0,
       is_pinned: setting?.is_pinned || false,
       is_stared: setting?.is_stared || false,
       is_public: g.is_public || false,
+      status: g.status ?? 0,
     });
   });
 
@@ -394,6 +446,7 @@ const allConversations = computed(() => {
       name: s.nickname,
       avatar: s.avatar,
       last_msg: s.last_msg || '',
+      last_msg_type: s.last_msg_type || (isImageUrl(s.last_msg) ? 2 : 1),
       last_msg_at: s.last_msg_at || '',
       unread: unreadMap.value[key] || 0,
       mentionCount: mentionMap.value[key] || 0,
@@ -471,6 +524,36 @@ function clearMention(key) {
   }
 }
 
+// 已清空会话的标记 { key: true }
+const clearedMap = ref({});
+
+function loadClearedMap() {
+  try {
+    const saved = localStorage.getItem('cleared_map');
+    if (saved) clearedMap.value = JSON.parse(saved);
+  } catch (e) {}
+}
+
+function saveClearedMap() {
+  localStorage.setItem('cleared_map', JSON.stringify(clearedMap.value));
+}
+
+function markConversationCleared(key) {
+  clearedMap.value[key] = true;
+  saveClearedMap();
+}
+
+function isConversationCleared(key) {
+  return !!clearedMap.value[key];
+}
+
+// 会话消息缓存 key（和 Chat.vue 里的格式一致）
+function getCacheKeyForConv(item) {
+  const myUid = userStore.userInfo?.uid || '';
+  const prefix = item.type === 'group' ? 'g' : 's';
+  return `msg_cache_${myUid}_${prefix}_${item.id}`;
+}
+
 // 请求系统通知权限
 function requestNotificationPermission() {
   if (!('Notification' in window)) return;
@@ -490,7 +573,7 @@ function showNotification(title, body, data) {
 
   const n = new Notification(title, {
     body,
-    icon: defaultAvatar,
+    icon: getAvatar('', title, { size: 128 }),
     silent: false,
   });
 
@@ -548,17 +631,65 @@ async function loadConvSettings() {
   } catch (e) {}
 }
 
-function openConversation(item) {
+function onItemClick(item) {
+  // 如果是长按触发的，就不打开会话
+  if (longPressTriggered) {
+    longPressTriggered = false;
+    return;
+  }
+  openConversation(item);
+}
+
+async function openConversation(item) {
   clearUnread(item.key);
   clearMention(item.key);
   if (item.type === 'group') {
-    router.push({ path: `/chat/${item.id}`, query: { type: 'group' } });
+    // 群聊：先检查是否有权限进入
+    // 公共群且开门：所有人都能进，直接跳
+    if (item.is_public && item.status === 0) {
+      router.push({ path: `/chat/${item.id}`, query: { type: 'group' } });
+      return;
+    }
+    // 已关门或私有群：校验成员身份
+    try {
+      await getGroupInfo(item.id);
+      router.push({ path: `/chat/${item.id}`, query: { type: 'group' } });
+    } catch (err) {
+      // 拦截器已经弹过 toast 了，这里只阻止跳转
+      console.warn('Cannot enter group:', err?.message);
+    }
   } else {
     router.push({ path: `/chat/${item.id}`, query: { type: 'single' } });
   }
 }
 
 // 显示操作菜单（长按/右键）
+// 长按检测（移动端用，比 contextmenu 更可靠）
+let longPressTimer = null;
+let longPressTriggered = false;
+function onItemTouchStart(item) {
+  longPressTriggered = false;
+  longPressTimer = setTimeout(() => {
+    longPressTriggered = true;
+    showActionMenu(item);
+    // 震动反馈（如果支持）
+    if (navigator.vibrate) navigator.vibrate(15);
+  }, 500);
+}
+function onItemTouchEnd() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+}
+function onItemTouchMove() {
+  // 手指移动了就取消长按
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+}
+
 function showActionMenu(item) {
   currentConv.value = item;
   actionMenuVisible.value = true;
@@ -567,6 +698,8 @@ function showActionMenu(item) {
 // 操作菜单选择
 async function onActionSelect(action) {
   if (!currentConv.value) return;
+  // 手动关闭 action sheet，确保点击后立即消失
+  actionMenuVisible.value = false;
   const conv = currentConv.value;
   const convType = conv.type === 'group' ? 2 : 1;
   const convId = conv.id;
@@ -611,6 +744,34 @@ async function onActionSelect(action) {
       }
       showToast(newStared ? '已标星' : '已取消标星');
     } catch (e) {}
+  } else if (action.key === 'clear') {
+    try {
+      await showConfirmDialog({
+        title: '清空聊天记录',
+        message: '确定清空该聊天的记录吗？清空后不可恢复。',
+        confirmButtonText: '清空',
+        confirmButtonColor: '#ee0a24',
+      });
+    } catch (e) {
+      return;
+    }
+    // 清除本地消息缓存
+    const cacheKey = getCacheKeyForConv(conv);
+    localStorage.removeItem(cacheKey);
+    // 清除 store 中的消息
+    socketStore.setMessages(conv.key, []);
+    // 记录已清空标记
+    markConversationCleared(conv.key);
+    // 清空最后一条消息预览
+    if (conv.type === 'group') {
+      const g = groups.value.find(g => String(g.id) === String(conv.id));
+      if (g) { g.last_msg = ''; g.last_msg_at = ''; }
+    } else {
+      const s = singleList.value.find(s => String(s.uid) === String(conv.id));
+      if (s) { s.last_msg = ''; s.last_msg_at = ''; }
+      saveSingleList();
+    }
+    showToast('已清空聊天记录');
   }
 }
 
@@ -684,7 +845,8 @@ function onNewMessage(msg) {
     // 更新群最后一条消息
     const g = groups.value.find(g => g.id == msg.group_id);
     if (g) {
-      g.last_msg = msg.type === 1 ? msg.content : '[图片]';
+      g.last_msg = msg.type === 1 ? msg.content : (msg.content || '');
+      g.last_msg_type = msg.type;
       g.last_msg_at = msg.created_at;
     }
     showNotification(
@@ -703,7 +865,8 @@ function onNewMessage(msg) {
       uid: msg.from_uid,
       nickname: msg.from_nickname || msg.from_uid,
       avatar: msg.from_avatar || '',
-      last_msg: msg.type === 1 ? msg.content : '[图片]',
+      last_msg: msg.type === 1 ? msg.content : (msg.content || ''),
+      last_msg_type: msg.type,
       last_msg_at: msg.created_at,
     };
     if (idx >= 0) {
@@ -731,6 +894,7 @@ onMounted(() => {
   loadSingleList();
   loadUnread();
   loadMentions();
+  loadClearedMap();
 
   requestNotificationPermission();
 
@@ -768,6 +932,18 @@ onUnmounted(() => {
   offNewMessage?.();
   offReconnect?.();
   stopScan();
+});
+
+// 从缓存切回来时，后台静默刷新数据
+let lastRefreshTime = 0;
+onActivated(() => {
+  const now = Date.now();
+  // 30秒内不重复刷新，避免频繁切换 tab 浪费流量
+  if (now - lastRefreshTime < 30 * 1000) return;
+  lastRefreshTime = now;
+  // 后台静默刷新
+  loadGroups();
+  loadConvSettings();
 });
 </script>
 
@@ -865,8 +1041,8 @@ onUnmounted(() => {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overflow-x: hidden;
-  padding-top: 46px;
-  padding-bottom: 56px;
+  padding-top: 68px;
+  padding-bottom: 75px;
   box-sizing: border-box;
   background: #fff;
   will-change: transform;
@@ -879,6 +1055,17 @@ onUnmounted(() => {
   border-bottom: 1px solid #f5f5f5;
   cursor: pointer;
   position: relative;
+  /* 禁止长按弹出系统菜单和文本选择 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.chat-item img {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none;
 }
 
 .chat-item:active {
@@ -950,6 +1137,11 @@ onUnmounted(() => {
   gap: 6px;
 }
 
+.more-btn {
+  padding: 4px;
+  margin: -4px;
+}
+
 .mention-dot {
   background: #07c160;
   color: #fff;
@@ -977,6 +1169,21 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.last-msg-img {
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.last-msg-text {
+  color: #999;
 }
 
 .tabbar-badge {

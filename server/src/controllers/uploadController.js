@@ -109,7 +109,8 @@ function hasOSS() {
 
 async function uploadToOSS(localPath, type, filename) {
   const client = getOSSClient();
-  const objectName = `${type}/${filename}`;
+  const prefix = config.oss?.prefix?.replace(/\/+$/, '') || ''; // 去掉末尾的 /
+  const objectName = prefix ? `${prefix}/${type}/${filename}` : `${type}/${filename}`;
   const result = await client.put(objectName, localPath);
   let url = config.oss.domain ? `${config.oss.domain}/${objectName}` : result.url;
   try { fs.unlinkSync(localPath); } catch (e) {}
@@ -139,6 +140,8 @@ async function getOssToken(req, res) {
 
     const type = req.query.type || 'chat';
     const uid = req.user.uid;
+    const prefix = config.oss?.prefix?.replace(/\/+$/, '') || '';
+    const dir = prefix ? `${prefix}/${type}/${uid}/` : `${type}/${uid}/`;
 
     const policy = {
       Version: '1',
@@ -146,12 +149,12 @@ async function getOssToken(req, res) {
         {
           Effect: 'Allow',
           Action: ['oss:PutObject'],
-          Resource: [`acs:oss:*:*:${config.oss.bucket}/${type}/${uid}/*`],
+          Resource: [`acs:oss:*:*:${config.oss.bucket}/${dir}*`],
         },
       ],
     };
 
-    const result = await sts.assumeRole(config.oss.roleArn, policy, 15 * 60);
+    const result = await sts.assumeRole(config.oss.roleArn, policy, 12 * 3600);
 
     res.json({
       code: 0,
@@ -162,7 +165,7 @@ async function getOssToken(req, res) {
         region: config.oss.region || 'oss-cn-shenzhen',
         bucket: config.oss.bucket,
         domain: config.oss.domain || '',
-        dir: `${type}/${uid}/`,
+        dir: dir,
       },
     });
   } catch (err) {

@@ -4,7 +4,7 @@
 
     <div class="invite-body" v-loading="loading">
       <div v-if="groupInfo" class="group-card">
-        <van-image round width="80" height="80" :src="groupInfo.avatar || defaultAvatar" />
+        <van-image round width="80" height="80" :src="getAvatar(groupInfo.avatar, groupInfo.name)" />
         <div class="group-name">{{ groupInfo.name }}</div>
         <div class="group-count">{{ groupInfo.member_count }} 人</div>
       </div>
@@ -38,7 +38,8 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showToast } from 'vant';
+import { showToast } from '@/utils/toast';
+import { getAvatar } from '@/utils/avatar';
 import { getGroupByInviteCode, joinGroupByInviteCode } from '@/api/group';
 import { useUserStore } from '@/store/user';
 
@@ -51,7 +52,7 @@ const groupInfo = ref(null);
 const loading = ref(true);
 const joining = ref(false);
 const error = ref('');
-const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGRlZnM+PHN0eWxlPi5he2ZpbGw6I2VlZTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImEiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjgiLz48dGV4dCB4PSIyNCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPu+4lTwvdGV4dD48L3N2Zz4=';
+
 
 async function loadGroupInfo() {
   loading.value = true;

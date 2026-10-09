@@ -9,7 +9,7 @@
     >
       <template #right>
         <template v-if="chatType === 'group'">
-          <van-icon name="more-o" size="22" @click="goToGroupInfo" />
+          <van-icon name="more-o" size="33" @click="goToGroupInfo" />
         </template>
         <span v-if="socketStore.status === 'connecting'" class="conn-status connecting">连接中...</span>
         <span v-else-if="socketStore.status === 'reconnecting'" class="conn-status reconnecting">重连中 {{ socketStore.reconnectAttempts }}</span>
@@ -30,6 +30,7 @@
       </div>
 
       <div class="messages" ref="messagesRef" @scroll="handleScroll">
+        <div v-if="isCleared()" class="cleared-tip">聊天记录已清空</div>
         <div v-if="loadingMore" class="load-more-tip">加载中...</div>
         <div v-else-if="!hasMoreMessages && messages.length > 0" class="load-more-tip">没有更早的消息了</div>
         <div
@@ -37,10 +38,11 @@
           :key="msg.id"
           class="msg-item"
           :class="{ 'msg-self': isSelf(msg) }"
+          :data-msg-id="msg.id"
         >
           <div class="msg-avatar" v-if="!isSelf(msg)" @click="showUserCard(msg.from_uid)">
             <van-image
-              :src="msg.from_avatar || defaultAvatar"
+              :src="msgAvatar(msg)"
               round
               width="40px"
               height="40px"
@@ -77,9 +79,9 @@
                 class="msg-content msg-image"
                 :class="{ 'msg-sending': msg._sending, 'msg-failed': msg._failed }"
                 v-else-if="msg.type === 2"
-                @click="previewImage(msg.content)"
+                @click="previewImage(msg)"
               >
-                <img :src="msg.content" />
+                <img :src="getImageSrc(msg)" @error="onImageError($event, msg)" />
               </div>
               <div v-if="isSelf(msg)" class="msg-status">
                 <span v-if="msg._sending" class="sending">发送中...</span>
@@ -94,6 +96,83 @@
           </div>
         </div>
         <div ref="bottomRef" class="msg-bottom"></div>
+      </div>
+
+      <!-- 新消息提示（不在底部时显示） -->
+      <div
+        v-if="unreadNewCount > 0"
+        class="new-msg-tip"
+        @click="jumpToBottom"
+      >
+        <span class="new-msg-count">{{ unreadNewCount }}</span>
+        <van-icon name="arrow-down" size="14" />
+      </div>
+
+      <div class="input-bar">
+        <!-- @ 候选成员栏 -->
+        <div v-if="chatType === 'group' && showMentionCandidates" class="mention-candidates">
+          <div
+            v-for="m in mentionCandidates"
+            :key="m.uid"
+            class="mention-candidate-item"
+            @click="insertMention(m)"
+          >
+            <van-image round width="28" height="28" :src="memberAvatar(m)" />
+            <span class="mention-candidate-name">{{ m.nickname }}</span>
+          </div>
+          <div v-if="mentionCandidates.length === 0" class="mention-candidate-empty">没有匹配的成员</div>
+        </div>
+        <div class="chat-input-wrap">
+          <div class="chat-input-icons">
+            <div class="chat-icon-btn" @click.stop="toggleEmojiPanel">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+            </div>
+            <div class="chat-icon-btn" @click.stop="chooseImage">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            </div>
+            <div
+              v-if="chatType === 'group'"
+              class="chat-icon-btn"
+              @click.stop="showMentionPicker = true"
+            >
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>
+              </svg>
+            </div>
+          </div>
+          <van-field
+            v-model="inputText"
+            placeholder="输入消息..."
+            :border="false"
+            class="chat-input"
+            @keyup.enter="sendText"
+            @input="onInputChange"
+            @focus="showEmojiPanel = false"
+          >
+            <template #button>
+              <van-button size="small" type="primary" @click="sendText" :disabled="!inputText.trim()">
+                发送
+              </van-button>
+            </template>
+          </van-field>
+        </div>
+        <input
+          ref="imageInput"
+          type="file"
+          accept="image/*"
+          style="display: none"
+          @change="onImageChange"
+        />
       </div>
     </div>
 
@@ -147,75 +226,8 @@
             <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 01.213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 00.167-.054l1.903-1.114a.864.864 0 01.717-.098 10.16 10.16 0 002.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.92-6.344 1.327-1.033 3.091-1.622 4.852-1.622.159 0 .318.008.475.016C15.59 5.164 12.48 2.188 8.691 2.188zm-2.72 3.955a.805.805 0 11 0 1.61.805.805 0 01 0-1.61zm5.543 0a.805.805 0 11 0 1.61.805.805 0 01 0-1.61z"/>
             <path d="M24 14.62c0-3.16-3.098-5.72-6.903-5.72-3.805 0-6.902 2.56-6.902 5.72 0 3.16 3.097 5.72 6.902 5.72.697 0 1.37-.1 2.004-.284a.688.688 0 01 .573.08l1.524.893a.26.26 0 00 .132.043.23.23 0 00 .233-.236c0-.058-.023-.114-.039-.17l-.312-1.184a.47.47 0 01 .17-.53C23.004 18.11 24 16.454 24 14.62zm-9.204-.65a.643.643 0 11 0-1.286.643.643 0 01 0 1.286zm4.598 0a.643.643 0 11 0-1.286.643.643 0 01 0 1.286z"/>
           </svg>
-        </div>
       </div>
     </div>
-
-    <div class="input-bar">
-      <!-- @ 候选成员栏 -->
-      <div v-if="chatType === 'group' && showMentionCandidates" class="mention-candidates">
-        <div
-          v-for="m in mentionCandidates"
-          :key="m.uid"
-          class="mention-candidate-item"
-          @click="insertMention(m)"
-        >
-          <van-image round width="28" height="28" :src="m.avatar || defaultAvatar" />
-          <span class="mention-candidate-name">{{ m.nickname }}</span>
-        </div>
-        <div v-if="mentionCandidates.length === 0" class="mention-candidate-empty">没有匹配的成员</div>
-      </div>
-      <div class="chat-input-wrap">
-        <div class="chat-input-icons">
-          <div class="chat-icon-btn" @click.stop="toggleEmojiPanel">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-              <line x1="9" y1="9" x2="9.01" y2="9"/>
-              <line x1="15" y1="9" x2="15.01" y2="9"/>
-            </svg>
-          </div>
-          <div class="chat-icon-btn" @click.stop="chooseImage">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-          </div>
-          <div
-            v-if="chatType === 'group'"
-            class="chat-icon-btn"
-            @click.stop="showMentionPicker = true"
-          >
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="4"/>
-              <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>
-            </svg>
-          </div>
-        </div>
-        <van-field
-          v-model="inputText"
-          placeholder="输入消息..."
-          :border="false"
-          class="chat-input"
-          @keyup.enter="sendText"
-          @input="onInputChange"
-          @focus="showEmojiPanel = false"
-        >
-          <template #button>
-            <van-button size="small" type="primary" @click="sendText" :disabled="!inputText.trim()">
-              发送
-            </van-button>
-          </template>
-        </van-field>
-      </div>
-      <input
-        ref="imageInput"
-        type="file"
-        accept="image/*"
-        style="display: none"
-        @change="onImageChange"
-      />
     </div>
 
     <!-- 表情面板（fixed 定位，不影响输入框布局） -->
@@ -262,7 +274,7 @@
             class="mention-picker-item"
             @click="selectMention(m)"
           >
-            <van-image round width="36" height="36" :src="m.avatar || defaultAvatar" />
+            <van-image round width="36" height="36" :src="memberAvatar(m)" />
             <div class="mention-picker-name">{{ m.nickname }}</div>
           </div>
           <van-empty v-if="filteredMembers.length === 0" description="没有找到成员" />
@@ -280,7 +292,7 @@
       <div class="user-card-popup" v-if="cardUser">
         <div class="user-card-header">
           <van-image
-            :src="cardUser.avatar || defaultAvatar"
+            :src="userAvatar(cardUser)"
             round
             width="64"
             height="64"
@@ -318,7 +330,11 @@
 <script setup>
 import { ref, onMounted, nextTick, computed, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showToast, showImagePreview, showConfirmDialog, showLoadingToast, closeToast } from 'vant';
+import { showImagePreview, showConfirmDialog } from 'vant';
+import 'vant/es/image-preview/style';
+import 'vant/es/dialog/style';
+import { showToast, showLoadingToast, closeToast } from '@/utils/toast';
+import { getAvatar } from '@/utils/avatar';
 import { getGroupInfo, getGroupMessages, joinGroup, getGroupMembers } from '@/api/group';
 import { getSingleMessages, getUserByUid } from '@/api/user';
 import { uploadFile } from '@/api/upload';
@@ -338,6 +354,77 @@ function getCacheKey() {
   const prefix = chatType.value === 'group' ? 'g' : 's';
   const myUid = userStore.userInfo?.uid || 'unknown';
   return `msg_cache_${myUid}_${prefix}_${targetId.value}`;
+}
+
+// 上次阅读位置的缓存 key
+function getReadPosKey() {
+  const prefix = chatType.value === 'group' ? 'g' : 's';
+  const myUid = userStore.userInfo?.uid || 'unknown';
+  return `read_pos_${myUid}_${prefix}_${targetId.value}`;
+}
+
+// 保存上次阅读位置
+function saveReadPosition() {
+  try {
+    const container = messagesRef.value;
+    if (!container || messages.value.length === 0) return;
+    // 找到当前可视区域最底部的那条消息的 id
+    const msgItems = container.querySelectorAll('.msg-item');
+    if (msgItems.length === 0) return;
+    // 用可视区域底部的消息作为阅读位置
+    const viewBottom = container.scrollTop + container.clientHeight;
+    let lastVisibleId = '';
+    for (const item of msgItems) {
+      const itemBottom = item.offsetTop + item.offsetHeight;
+      if (itemBottom <= viewBottom + 10) {
+        // 从 data-key 或者 id 里取消息 id
+        const id = item.getAttribute('data-msg-id') || '';
+        if (id) lastVisibleId = id;
+      } else {
+        break;
+      }
+    }
+    if (lastVisibleId) {
+      localStorage.setItem(getReadPosKey(), lastVisibleId);
+    }
+  } catch (e) {}
+}
+
+// 读取上次阅读位置
+function getReadPosition() {
+  try {
+    return localStorage.getItem(getReadPosKey()) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+// 滚动到指定消息
+function scrollToMsgId(msgId) {
+  if (!msgId) return false;
+  const el = messagesRef.value?.querySelector(`[data-msg-id="${msgId}"]`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'auto', block: 'end' });
+    return true;
+  }
+  return false;
+}
+
+// 会话 key（和 Home.vue 的 cleared_map 格式一致）
+function getConvKey() {
+  return chatType.value === 'group' ? `group_${targetId.value}` : `single_${targetId.value}`;
+}
+
+// 是否已清空聊天记录
+function isCleared() {
+  try {
+    const saved = localStorage.getItem('cleared_map');
+    if (saved) {
+      const map = JSON.parse(saved);
+      return !!map[getConvKey()];
+    }
+  } catch (e) {}
+  return false;
 }
 
 // 从本地缓存加载消息
@@ -394,6 +481,11 @@ const inputText = ref('');
 const imageInput = ref(null);
 const showEmojiPanel = ref(false);
 
+// 未读新消息数（用户不在底部时，新消息计数）
+const unreadNewCount = ref(0);
+// 是否在底部附近
+const isAtBottom = ref(true);
+
 // 常用 emoji 列表
 const emojiList = [
   '😀','😃','😄','😁','😅','😂','🤣','😊','😇','🙂',
@@ -443,7 +535,16 @@ const mentionCandidates = ref([]);
 let mentionStartPos = -1; // @ 符号在输入框中的位置
 
 const userInfo = computed(() => userStore.userInfo);
-const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGRlZnM+PHN0eWxlPi5he2ZpbGw6I2VlZTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImEiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjgiLz48dGV4dCB4PSIyNCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPu+4lTwvdGV4dD48L3N2Zz4=';
+
+function msgAvatar(msg) {
+  return getAvatar(msg?.from_avatar, msg?.from_name || msg?.from_nickname);
+}
+function memberAvatar(m) {
+  return getAvatar(m?.avatar, m?.nickname || m?.name);
+}
+function userAvatar(u) {
+  return getAvatar(u?.avatar, u?.nickname || u?.name);
+}
 
 // ========== 快捷数字按钮 ==========
 const quickBtnsVisible = ref(true);
@@ -560,11 +661,23 @@ function onDragMove(e) {
   const newX = point.clientX - dragStartPos.x;
   const newY = point.clientY - dragStartPos.y;
 
-  // 限制在可视区域内
-  const maxX = window.innerWidth - 60;
+  // 限制在可视区域内（PC 端限制在 App 容器内）
+  const appEl = document.getElementById('app');
+  const appRect = appEl?.getBoundingClientRect();
+  const isPC = window.innerWidth >= 768 && appRect && appRect.width < window.innerWidth;
+
+  let minX = 0;
+  let maxX = window.innerWidth - 60;
   const maxY = window.innerHeight - 200;
+
+  if (isPC && appRect) {
+    // PC 端：限制在 App 容器范围内
+    minX = appRect.left;
+    maxX = appRect.right - 60;
+  }
+
   quickBtnsPos.value = {
-    x: Math.max(0, Math.min(newX, maxX)),
+    x: Math.max(minX, Math.min(newX, maxX)),
     y: Math.max(60, Math.min(newY, maxY)),
   };
   isDragging = true;
@@ -911,13 +1024,32 @@ async function loadChatInfo() {
 async function loadMessages() {
   hasMoreMessages.value = true;
   loadingMore.value = false;
+  unreadNewCount.value = 0;
+
+  // 如果已清空聊天记录，不加载历史消息
+  if (isCleared()) {
+    messages.value = [];
+    hasMoreMessages.value = false;
+    return;
+  }
 
   // 先从本地缓存加载（秒显）
   const hasCache = loadMessagesFromCache();
 
   if (hasCache) {
-    // 有缓存：先滚动到底，然后增量拉取所有新消息
-    scrollToBottom(true);
+    // 有缓存：先定位到上次阅读的位置
+    nextTick(() => {
+      const lastReadId = getReadPosition();
+      const found = lastReadId && scrollToMsgId(lastReadId);
+      if (!found) {
+        // 找不到上次位置（比如消息被清了），直接滚到底
+        scrollToBottom();
+      } else {
+        // 定位成功，标记不在底部
+        isAtBottom.value = false;
+      }
+    });
+    // 后台增量拉取新消息
     try {
       await syncNewMessages();
     } catch (e) {
@@ -935,7 +1067,7 @@ async function loadMessages() {
       hasMoreMessages.value = false;
     }
     saveMessagesToCache();
-    scrollToBottom(true);
+    scrollToBottom();
   }
 }
 
@@ -975,13 +1107,12 @@ async function syncNewMessages() {
 
   if (totalNew > 0) {
     saveMessagesToCache();
-    // 如果之前在底部附近，自动滚到底
-    const container = messagesRef.value;
-    if (container) {
-      const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      if (nearBottom) {
-        scrollToBottom();
-      }
+    // 如果之前在底部附近（或者上次阅读位置就是底部），自动滚到底
+    // 否则计入未读新消息数
+    if (isAtBottom.value) {
+      scrollToBottom();
+    } else {
+      unreadNewCount.value += totalNew;
     }
   }
 
@@ -1035,18 +1166,44 @@ function scrollToBottom(smooth = false) {
     } else if (messagesRef.value) {
       messagesRef.value.scrollTop = messagesRef.value.scrollHeight;
     }
+    unreadNewCount.value = 0;
+    isAtBottom.value = true;
   });
 }
 
-// 滚动监听：滚到顶部加载更多
+// 跳到底部（给新消息提示按钮用）
+function jumpToBottom() {
+  scrollToBottom(true);
+}
+
+// 滚动监听：滚到顶部加载更多 + 判断是否在底部
 function handleScroll() {
   const container = messagesRef.value;
   if (!container) return;
+
+  // 判断是否在底部附近（50px 内算在底部）
+  const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+  const atBottom = distanceToBottom < 50;
+  if (atBottom !== isAtBottom.value) {
+    isAtBottom.value = atBottom;
+    if (atBottom) {
+      unreadNewCount.value = 0;
+    }
+  }
+
+  // 保存阅读位置（节流）
+  if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(() => {
+    saveReadPosition();
+  }, 500);
+
   // 距离顶部小于 50px 时加载更多
   if (container.scrollTop < 50 && hasMoreMessages.value && !loadingMore.value) {
     loadMoreMessages();
   }
 }
+
+let scrollSaveTimer = null;
 
 function sendText() {
   if (!inputText.value.trim()) return;
@@ -1161,40 +1318,35 @@ async function onImageChange(e) {
   scrollToBottom();
   e.target.value = '';
 
-  const startTime = Date.now();
-  const minDisplayTime = 300;
-
   try {
-    showLoadingToast({ message: '发送中...', forbidClick: true, duration: 0 });
-
+    // 先上传图片
     const result = await uploadFile('chat', file);
-    closeToast();
-
     const imageUrl = result.url;
+
+    // 上传成功，替换本地图片 URL 为真实 URL（避免发送失败后本地预览还在）
+    const idx = messages.value.findIndex(m => m._tempId === tempId);
+    if (idx >= 0) {
+      messages.value[idx].content = imageUrl;
+    }
+
     const msgData = chatType.value === 'group'
       ? { groupId: targetId.value, type: 2, content: imageUrl }
       : { toUid: targetId.value, type: 2, content: imageUrl };
 
     socketStore.sendMessage(msgData, (res) => {
-      const idx = messages.value.findIndex(m => m._tempId === tempId);
-      if (idx < 0) return;
+      const idx2 = messages.value.findIndex(m => m._tempId === tempId);
+      if (idx2 < 0) return;
 
-      const elapsed = Date.now() - startTime;
-      const waitTime = Math.max(0, minDisplayTime - elapsed);
-
-      setTimeout(() => {
-        if (res.code === 0) {
-          messages.value.splice(idx, 1, { ...res.data, _sending: false, _failed: false });
-          saveMessagesToCache();
-        } else {
-          messages.value[idx]._sending = false;
-          messages.value[idx]._failed = true;
-          showToast(res.message || '发送失败');
-        }
-      }, waitTime);
+      if (res.code === 0) {
+        messages.value.splice(idx2, 1, { ...res.data, _sending: false, _failed: false });
+        saveMessagesToCache();
+      } else {
+        messages.value[idx2]._sending = false;
+        messages.value[idx2]._failed = true;
+        showToast(res.message || '发送失败');
+      }
     });
   } catch (err) {
-    closeToast();
     const idx = messages.value.findIndex(m => m._tempId === tempId);
     if (idx >= 0) {
       messages.value[idx]._sending = false;
@@ -1238,7 +1390,29 @@ function resendMessage(msg) {
   });
 }
 
-function previewImage(url) {
+// 获取图片消息的 URL（防御性：content 可能是字符串或对象）
+function getImageSrc(msg) {
+  const c = msg?.content;
+  if (!c) return '';
+  if (typeof c === 'string') return c;
+  if (typeof c === 'object') {
+    // 尝试从对象中取 url
+    return c.url || c.src || c.imageUrl || String(c);
+  }
+  return String(c);
+}
+
+// 图片加载失败
+function onImageError(e, msg) {
+  console.warn('图片加载失败:', msg?.content, msg);
+}
+
+function previewImage(msg) {
+  const url = getImageSrc(msg);
+  if (!url) {
+    showToast('图片加载失败');
+    return;
+  }
   showImagePreview([url]);
 }
 
@@ -1389,7 +1563,15 @@ function onNewMessage(msg) {
   }
 
   messages.value.push(msg);
-  scrollToBottom();
+
+  // 如果在底部附近，自动滚到底；否则计数，等用户点新消息按钮再滚
+  if (isAtBottom.value || isSelfMsg) {
+    scrollToBottom();
+    unreadNewCount.value = 0;
+  } else {
+    unreadNewCount.value++;
+  }
+
   saveMessagesToCache();
 
   // @ 我：增加未读数
@@ -1446,7 +1628,55 @@ function updateSingleList(msg) {
 
 // 处理键盘弹起（移动端输入时），确保消息可见
 function handleResize() {
-  scrollToBottom();
+  nextTick(() => scrollToBottom());
+}
+
+// 判断是否是安卓
+function isAndroid() {
+  return /Android/i.test(navigator.userAgent);
+}
+
+// 键盘弹起适配
+// iOS：系统自动把 WebView 往上推，fixed bottom:0 的输入框自动在键盘上面，不用管
+// 安卓：键盘是 overlay 模式，WebView 高度不变，需要手动把输入框顶上去
+// 方案：安卓上监听 visualViewport，通过 CSS 变量 --kb-h 控制输入框 bottom
+let vv = null;
+function onVisualViewportChange() {
+  if (!vv) return;
+  // 键盘高度 = 窗口高度 - 可视高度 - 可视区域顶部偏移
+  const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  document.documentElement.style.setProperty('--kb-h', kbHeight + 'px');
+  // 键盘弹起后滚动到底部
+  if (kbHeight > 50) {
+    nextTick(() => scrollToBottom());
+  }
+}
+
+function bindKeyboardFix() {
+  // iOS 不需要特殊处理，系统会自动推
+  if (!isAndroid()) {
+    window.addEventListener('resize', handleResize);
+    return;
+  }
+  // 安卓用 visualViewport
+  vv = window.visualViewport;
+  if (vv) {
+    vv.addEventListener('resize', onVisualViewportChange);
+    vv.addEventListener('scroll', onVisualViewportChange);
+  } else {
+    window.addEventListener('resize', handleResize);
+  }
+}
+
+function unbindKeyboardFix() {
+  if (vv) {
+    vv.removeEventListener('resize', onVisualViewportChange);
+    vv.removeEventListener('scroll', onVisualViewportChange);
+    vv = null;
+  } else {
+    window.removeEventListener('resize', handleResize);
+  }
+  document.documentElement.style.removeProperty('--kb-h');
 }
 
 onMounted(() => {
@@ -1478,7 +1708,8 @@ onMounted(() => {
     }
   });
 
-  window.addEventListener('resize', handleResize);
+  // 键盘弹起适配（安卓输入框遮挡问题）
+  bindKeyboardFix();
   // 页面从后台切回前台时，同步一次消息（防止实时推送漏了）
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -1584,7 +1815,7 @@ onUnmounted(() => {
   offMessageWithdrawn?.();
   offReconnect?.();
   stopSyncTimer();
-  window.removeEventListener('resize', handleResize);
+  unbindKeyboardFix();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 </script>
@@ -1592,21 +1823,21 @@ onUnmounted(() => {
 <style scoped>
 .chat-page {
   height: 100vh;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
   background: #ededed;
   overflow: hidden;
+  position: relative;
+  --kb-h: 0px;
 }
 
 .chat-body {
-  flex: 1;
-  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  padding-top: 46px;
-  padding-bottom: 56px;
+  padding-top: 68px;
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  padding-bottom: calc(60px + var(--kb-h, 0px) + env(safe-area-inset-bottom));
   box-sizing: border-box;
+  position: relative;
 }
 
 .messages {
@@ -1624,6 +1855,13 @@ onUnmounted(() => {
   color: #999;
   font-size: 12px;
   padding: 10px 0;
+}
+
+.cleared-tip {
+  text-align: center;
+  color: #bbb;
+  font-size: 12px;
+  padding: 20px 0 10px;
 }
 
 .msg-bottom {
@@ -1751,14 +1989,15 @@ onUnmounted(() => {
 
 .input-bar {
   position: fixed;
-  bottom: 0;
   left: 0;
   right: 0;
+  bottom: 0;
+  bottom: calc(var(--kb-h, 0px) + env(safe-area-inset-bottom));
   background: #f7f7f7;
   border-top: 1px solid #e0e0e0;
   padding: 8px 12px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
   z-index: 100;
+  box-sizing: border-box;
 }
 
 .chat-input-wrap {
@@ -2020,6 +2259,43 @@ onUnmounted(() => {
   transform: scale(0.95);
 }
 
+/* 新消息提示按钮 */
+.new-msg-tip {
+  position: absolute;
+  right: 16px;
+  bottom: 80px;
+  z-index: 50;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: #07c160;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  animation: bounceIn 0.3s ease;
+}
+
+.new-msg-count {
+  max-width: 24px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
 .mention-icon {
   font-size: 16px;
   font-weight: 600;
@@ -2205,5 +2481,34 @@ onUnmounted(() => {
 
 .user-card-actions {
   padding: 0 8px;
+}
+
+/* ====== PC 端适配：快捷面板随 App 容器一起缩窄 ====== */
+@media (min-width: 768px) {
+  .quick-btns {
+    min-width: 120px;
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .quick-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .quick-handle {
+    width: 36px;
+    height: 30px;
+  }
+
+  .quick-collapse {
+    width: 24px;
+    height: 24px;
+  }
+
+  .quick-btns-list {
+    gap: 6px;
+  }
 }
 </style>

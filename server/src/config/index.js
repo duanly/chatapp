@@ -31,6 +31,7 @@ module.exports = {
     accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
     roleArn: process.env.OSS_ROLE_ARN,
     domain: process.env.OSS_DOMAIN,
+    prefix: process.env.OSS_PREFIX || '',
   },
 
   sms: {

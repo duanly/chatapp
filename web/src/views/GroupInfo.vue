@@ -2,11 +2,12 @@
   <div class="group-info-page">
     <van-nav-bar title="群详情" left-text="返回" left-arrow @click-left="$router.back()" fixed />
 
-    <div class="page-body">
-      <!-- 群信息 -->
-      <div class="group-header">
+    <div class="page-scroll">
+      <div class="page-body">
+        <!-- 群信息 -->
+        <div class="group-header">
         <div class="group-avatar-wrap" @click="onAvatarClick">
-          <van-image round width="64" height="64" :src="groupAvatarUrl || defaultAvatar" />
+          <van-image round width="64" height="64" :src="getAvatar(groupAvatarUrl, groupInfo?.name)" />
           <div v-if="isOwner" class="avatar-edit-badge">
             <van-icon name="camera-o" size="14" color="#fff" />
           </div>
@@ -46,7 +47,7 @@
             class="member-item"
             @click="onMemberClick(m)"
           >
-            <van-image round width="48" height="48" :src="m.avatar || defaultAvatar" />
+            <van-image round width="48" height="48" :src="getAvatar(m.avatar, m.nickname)" />
             <div class="member-name">{{ m.nickname }}</div>
             <div v-if="m.role === 2" class="member-tag">群主</div>
             <div v-else-if="m.short_no" class="member-shortno">{{ m.short_no }}</div>
@@ -72,6 +73,7 @@
       <van-cell-group inset style="margin-top: 20px">
         <van-cell title="退出群聊" center style="color: #ee0a24" @click="handleLeaveGroup" />
       </van-cell-group>
+      </div>
     </div>
 
     <!-- 二维码弹窗 -->
@@ -141,9 +143,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showToast, showConfirmDialog } from 'vant';
+import { showConfirmDialog } from 'vant';
+import 'vant/es/dialog/style';
+import { showToast } from '@/utils/toast';
+import { getAvatar } from '@/utils/avatar';
 import {
   getGroupInfo,
   getGroupMembers,
@@ -158,6 +163,8 @@ import { useUserStore } from '@/store/user';
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
+
+defineOptions({ name: 'GroupInfo' });
 
 const groupId = route.params.id;
 const groupInfo = ref(null);
@@ -178,7 +185,7 @@ const editNameInput = ref('');
 const currentMember = ref(null);
 
 const avatarInput = ref(null);
-const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGRlZnM+PHN0eWxlPi5he2ZpbGw6I2VlZTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImEiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjgiLz48dGV4dCB4PSIyNCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPu+4lTwvdGV4dD48L3N2Zz4=';
+
 
 // 是否是群主
 const isOwner = computed(() => {
@@ -378,14 +385,34 @@ onMounted(() => {
   loadGroupInfo();
   loadMembers();
 });
+
+// 从缓存激活时，后台静默刷新（60秒内不重复刷新）
+let lastRefreshTime = 0;
+onActivated(() => {
+  const now = Date.now();
+  if (now - lastRefreshTime < 60 * 1000) return;
+  lastRefreshTime = now;
+  loadGroupInfo();
+  loadMembers();
+});
 </script>
 
 <style scoped>
 .group-info-page {
-  min-height: 100vh;
+  height: 100vh;
   background: #ededed;
-  padding-top: 46px;
-  padding-bottom: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-scroll {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 68px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .page-body {

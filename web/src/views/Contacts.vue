@@ -24,7 +24,7 @@
           class="user-item"
           @click="openGroup(g)"
         >
-          <van-image round width="44" height="44" :src="g.avatar || defaultGroupAvatar" />
+          <van-image round width="44" height="44" :src="groupAvatar(g)" />
           <div class="user-info">
             <div class="user-name">
               {{ g.name }}
@@ -45,7 +45,7 @@
           class="user-item"
           @click="startChat(u)"
         >
-          <van-image round width="44" height="44" :src="u.avatar || defaultAvatar" />
+          <van-image round width="44" height="44" :src="userAvatar(u)" />
           <div class="user-info">
             <div class="user-name">
               {{ u.nickname }}
@@ -66,7 +66,7 @@
           class="user-item"
           @click="startChat(user)"
         >
-          <van-image round width="44" height="44" :src="user.avatar || defaultAvatar" />
+          <van-image round width="44" height="44" :src="userAvatar(user)" />
           <div class="user-info">
             <div class="user-name">
               {{ user.nickname }}
@@ -79,23 +79,26 @@
       </template>
     </div>
 
-    <van-tabbar v-model="active" active-color="#1989fa">
-      <van-tabbar-item icon="chat-o" @click="$router.push('/')">消息</van-tabbar-item>
-      <van-tabbar-item icon="friends-o">联系人</van-tabbar-item>
-      <van-tabbar-item icon="user-o" @click="$router.push('/profile')">我的</van-tabbar-item>
+    <van-tabbar route active-color="#07c160">
+      <van-tabbar-item icon="chat-o" to="/">消息</van-tabbar-item>
+      <van-tabbar-item icon="friends-o" to="/contacts">联系人</van-tabbar-item>
+      <van-tabbar-item icon="user-o" to="/profile">我的</van-tabbar-item>
     </van-tabbar>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { searchUsers, getAllUsers, getPublicUsers } from '@/api/user';
 import { getMyGroups } from '@/api/group';
 import { useUserStore } from '@/store/user';
+import { getAvatar } from '@/utils/avatar';
 
 const router = useRouter();
 const userStore = useUserStore();
+
+defineOptions({ name: 'Contacts' });
 
 // 当前用户是否是公众号/公开用户
 const isPublicAccount = computed(() => !!userStore.userInfo?.is_public);
@@ -106,8 +109,13 @@ const allUsers = ref([]);
 const publicUsers = ref([]);
 const publicGroups = ref([]);
 const loading = ref(false);
-const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGRlZnM+PHN0eWxlPi5he2ZpbGw6I2VlZTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImEiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjgiLz48dGV4dCB4PSIyNCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPu+4lTwvdGV4dD48L3N2Zz4=';
-const defaultGroupAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGRlZnM+PHN0eWxlPi5he2ZpbGw6I2VlZTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImEiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjgiLz48dGV4dCB4PSIyNCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPv+4kTwvdGV4dD48L3N2Zz4=';
+
+function userAvatar(u) {
+  return getAvatar(u?.avatar, u?.nickname);
+}
+function groupAvatar(g) {
+  return getAvatar(g?.avatar, g?.name);
+}
 
 // 普通用户（公众号账号能看到，排除公共用户和自己）
 const normalUsers = computed(() => {
@@ -123,13 +131,12 @@ async function loadList() {
   loading.value = true;
   try {
     if (keyword.value.trim()) {
-      // 搜索模式
+      // 搜索模式（不走缓存）
       const kw = keyword.value.trim();
       const [users, groups] = await Promise.all([
         searchUsers(kw),
         getMyGroups(),
       ]);
-      // 搜索结果：公众号/公开用户放一组，其余放 normalUsers
       publicUsers.value = users.filter(u => u.is_public);
       allUsers.value = users;
       publicGroups.value = groups.filter(g =>
@@ -138,19 +145,46 @@ async function loadList() {
     } else {
       // 正常模式
       const tasks = [getPublicUsers(), getMyGroups()];
-      // 公众号账号额外加载全部用户
       if (isPublicAccount.value) {
         tasks.push(getAllUsers());
       }
       const [pubUsers, groups, allUserList] = await Promise.all(tasks);
       publicUsers.value = pubUsers;
       allUsers.value = allUserList || [];
-      // 只显示公共群在联系人里
       publicGroups.value = groups.filter(g => g.is_public);
+      // 保存到本地缓存
+      saveCache();
     }
   } catch (e) {} finally {
     loading.value = false;
   }
+}
+
+// 从本地缓存加载（秒显）
+function loadFromCache() {
+  try {
+    const saved = localStorage.getItem('contacts_cache');
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data.publicUsers) publicUsers.value = data.publicUsers;
+      if (data.publicGroups) publicGroups.value = data.publicGroups;
+      if (data.allUsers) allUsers.value = data.allUsers;
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+// 保存到本地缓存
+function saveCache() {
+  try {
+    const data = {
+      publicUsers: publicUsers.value,
+      publicGroups: publicGroups.value,
+      allUsers: allUsers.value,
+    };
+    localStorage.setItem('contacts_cache', JSON.stringify(data));
+  } catch (e) {}
 }
 
 function openGroup(g) {
@@ -182,6 +216,22 @@ onMounted(() => {
     router.push('/login');
     return;
   }
+  // 先从本地缓存加载，秒显
+  loadFromCache();
+  // 后台刷新
+  requestAnimationFrame(() => {
+    loadList();
+  });
+});
+
+// 从缓存激活时，后台静默刷新（60秒节流）
+let lastRefreshTime = 0;
+onActivated(() => {
+  const now = Date.now();
+  if (now - lastRefreshTime < 60 * 1000) return;
+  // 有搜索关键词时不刷新，避免干扰搜索结果
+  if (keyword.value.trim()) return;
+  lastRefreshTime = now;
   loadList();
 });
 </script>
@@ -213,8 +263,8 @@ onMounted(() => {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overflow-x: hidden;
-  padding-top: 100px;
-  padding-bottom: 56px;
+  padding-top: 122px;
+  padding-bottom: 75px;
   box-sizing: border-box;
   background: #fff;
   will-change: transform;

@@ -46,7 +46,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { showToast } from 'vant';
+import { showToast } from '@/utils/toast';
 import { loginByPassword } from '@/api/user';
 import { useUserStore } from '@/store/user';
 import { useSocketStore } from '@/store/socket';

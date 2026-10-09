@@ -60,6 +60,11 @@ async function loginByPassword(req, res) {
     await userModel.update(user.uid, { deviceId });
   }
 
+  // 未开启设备锁时，也记录当前设备（方便后台查看，不校验）
+  if (!user.device_lock && deviceId && user.device_id !== deviceId) {
+    await userModel.update(user.uid, { deviceId });
+  }
+
   // 更新登录时间和最后登录 IP
   await userModel.updateLastLogin(user.uid, clientIp);
 

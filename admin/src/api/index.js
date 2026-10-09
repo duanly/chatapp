@@ -32,12 +32,20 @@ export function setUserDeviceLock(uid, deviceLock) {
   return request.post(`/users/${uid}/device-lock`, { deviceLock });
 }
 
+export function clearUserDevice(uid) {
+  return request.post(`/users/${uid}/clear-device`);
+}
+
 export function getGroupList(params) {
   return request.get('/groups', { params });
 }
 
 export function createGroup(data) {
   return request.post('/groups', data);
+}
+
+export function updateGroup(id, data) {
+  return request.put(`/groups/${id}`, data);
 }
 
 export function updateGroupStatus(id, status) {

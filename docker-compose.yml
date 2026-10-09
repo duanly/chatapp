@@ -5,14 +5,14 @@ services:
     image: postgres:15-alpine
     restart: always
     environment:
-      POSTGRES_DB: chatapp
-      POSTGRES_USER: chatapp
-      POSTGRES_PASSWORD: chatapp123
+      POSTGRES_DB: ${POSTGRES_DB:-chatapp}
+      POSTGRES_USER: ${POSTGRES_USER:-chatapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatapp123}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chatapp -d chatapp"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatapp} -d ${POSTGRES_DB:-chatapp}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -34,24 +34,26 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
-      NODE_ENV: production
-      PORT: 3000
-      DB_TYPE: postgres
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: chatapp
-      DB_PASSWORD: chatapp123
-      DB_NAME: chatapp
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      JWT_SECRET: change_this_to_a_random_secret_key
-      JWT_EXPIRES_IN: 7d
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      DB_TYPE: ${DB_TYPE:-postgres}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-chatapp}
+      DB_PASSWORD: ${DB_PASSWORD:-chatapp123}
+      DB_NAME: ${DB_NAME:-chatapp}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      JWT_SECRET: ${JWT_SECRET:-change_this_to_a_random_secret_key}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       # OSS 配置（可选，不配置则用本地存储）
-      # OSS_REGION: oss-cn-guangzhou
-      # OSS_BUCKET: your-bucket
-      # OSS_ACCESS_KEY_ID: your-access-key
-      # OSS_ACCESS_KEY_SECRET: your-access-secret
-      # OSS_DOMAIN: https://cdn.example.com
+      OSS_REGION: ${OSS_REGION:-}
+      OSS_BUCKET: ${OSS_BUCKET:-}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+      OSS_DOMAIN: ${OSS_DOMAIN:-}
+      OSS_PREFIX: ${OSS_PREFIX:-}
+      OSS_ROLE_ARN: ${OSS_ROLE_ARN:-}
     volumes:
       - uploads_data:/app/uploads
     depends_on:
@@ -91,37 +93,37 @@ services:
     restart: always
     environment:
       # 轻聊服务器地址（内部直接连 server 服务）
-      SERVER_URL: http://server:3000
+      SERVER_URL: ${SERVER_URL:-http://server:3000}
       # 机器人 API Key（在管理后台创建机器人后获取）
-      API_KEY: your_robot_api_key_here
+      API_KEY: ${API_KEY:-your_robot_api_key_here}
       # 外部业务服务器 IP
-      BIZ_SERVER_IP: 127.0.0.1
+      BIZ_SERVER_IP: ${BIZ_SERVER_IP:-127.0.0.1}
       # 是否启用业务 WebSocket
-      ENABLE_BIZ_WS: "true"
+      ENABLE_BIZ_WS: ${ENABLE_BIZ_WS:-true}
       # 是否启用消息转发
-      ENABLE_MESSAGE_FORWARD: "true"
+      ENABLE_MESSAGE_FORWARD: ${ENABLE_MESSAGE_FORWARD:-true}
       # 转发接口路径
-      FORWARD_CHAT_API: /api/chat
-      FORWARD_RECALL_API: /api/recallmsg
-      ADD_PAOCHAT_API: /api/addpaochatuser
+      FORWARD_CHAT_API: ${FORWARD_CHAT_API:-/api/chat}
+      FORWARD_RECALL_API: ${FORWARD_RECALL_API:-/api/recallmsg}
+      ADD_PAOCHAT_API: ${ADD_PAOCHAT_API:-/api/addpaochatuser}
       # 新成员入群自动调用 addpaochatuser
-      ENABLE_ADD_PAOCHAT_USER: "false"
+      ENABLE_ADD_PAOCHAT_USER: ${ENABLE_ADD_PAOCHAT_USER:-false}
       # 本地面板端口
-      PANEL_PORT: 7777
+      PANEL_PORT: ${PANEL_PORT:-7777}
       # 文件夹监控（容器内默认关闭，路径需挂 volume）
-      ENABLE_FOLDER_WATCH: "false"
-      WATCH_FOLDER: /data/watch
+      ENABLE_FOLDER_WATCH: ${ENABLE_FOLDER_WATCH:-false}
+      WATCH_FOLDER: ${WATCH_FOLDER:-/data/watch}
       # OSS 配置（可选，不配置则用 base64 发图）
-      # OSS_REGION: oss-cn-guangzhou
-      # OSS_BUCKET: your-bucket
-      # OSS_ACCESS_KEY_ID: your-access-key
-      # OSS_ACCESS_KEY_SECRET: your-access-secret
-      # OSS_DOMAIN: https://cdn.example.com
-      # OSS_PREFIX: robot
+      OSS_REGION: ${OSS_REGION:-}
+      OSS_BUCKET: ${OSS_BUCKET:-}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+      OSS_DOMAIN: ${OSS_DOMAIN:-}
+      OSS_PREFIX: ${ROBOT_OSS_PREFIX:-robot}
     depends_on:
       - server
     ports:
-      - "7777:7777"
+      - "${PANEL_PORT:-7777}:7777"
     # 如果需要监控本地文件夹，取消下面注释并修改宿主机路径
     # volumes:
     #   - /path/to/watch:/data/watch

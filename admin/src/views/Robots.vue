@@ -10,8 +10,7 @@
         <template #default="{ row }">
           <el-avatar
             :size="36"
-            :src="row.avatar || defaultAvatar"
-            style="background: #f0f0f0"
+            :src="getAvatar(row.avatar, row.name)"
           />
         </template>
       </el-table-column>
@@ -100,8 +99,7 @@
           <div class="avatar-upload">
             <el-avatar
               :size="64"
-              :src="configForm.avatar || defaultAvatar"
-              style="background: #f0f0f0"
+              :src="getAvatar(configForm.avatar, configForm.name)"
             />
             <el-upload
               :show-file-list="false"
@@ -171,7 +169,12 @@
             </template>
             <template v-else-if="log.msg_type === 1">{{ log.content }}</template>
             <template v-else-if="log.msg_type === 2">
-              <el-image :src="log.content" style="max-width: 200px; max-height: 200px" fit="contain" />
+              <el-image
+                :src="log.content"
+                :preview-src-list="[log.content]"
+                style="max-width: 200px; max-height: 200px; cursor: pointer"
+                fit="contain"
+              />
             </template>
             <template v-else>[文件消息]</template>
           </div>
@@ -202,6 +205,7 @@ import {
   getRobotMessageLogs, uploadFile
 } from '@/api';
 import { getGroupList } from '@/api';
+import { getAvatar } from '@/utils/avatar';
 
 const loading = ref(false);
 const list = ref([]);
@@ -224,8 +228,6 @@ const configForm = reactive({
   name: '',
   avatar: '',
 });
-
-const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjZTBlMGUwIiByeD0iMzIiLz48dGV4dCB4PSIzMiIgeT0iNDAiIGZvbnQtc2l6ZT0iMjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiPu+4lTwvdGV4dD48L3N2Zz4=';
 
 function beforeAvatarUpload(file) {
   const isImage = file.type.startsWith('image/');

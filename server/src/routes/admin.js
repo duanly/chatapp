@@ -15,11 +15,13 @@ router.post('/users/batch', adminAuthMiddleware, adminController.batchCreateUser
 router.post('/users/:uid/status', adminAuthMiddleware, adminController.setUserStatus);
 router.post('/users/:uid/public', adminAuthMiddleware, adminController.setUserPublic);
 router.post('/users/:uid/device-lock', adminAuthMiddleware, adminController.setDeviceLock);
+router.post('/users/:uid/clear-device', adminAuthMiddleware, adminController.clearDevice);
 router.put('/users/:uid/remark', adminAuthMiddleware, adminController.updateUserRemark);
 
 // 群管理
 router.get('/groups', adminAuthMiddleware, adminController.groupList);
 router.post('/groups', adminAuthMiddleware, adminController.createGroup);
+router.put('/groups/:id', adminAuthMiddleware, adminController.updateGroup);
 router.post('/groups/:id/status', adminAuthMiddleware, adminController.setGroupStatus);
 router.post('/groups/:id/public', adminAuthMiddleware, adminController.setGroupPublic);
 router.delete('/groups/:id', adminAuthMiddleware, adminController.disbandGroup);

@@ -11,11 +11,13 @@ const routes = [
     path: '/',
     name: 'Home',
     component: () => import('@/views/Home.vue'),
+    meta: { keepAlive: true },
   },
   {
     path: '/contacts',
     name: 'Contacts',
     component: () => import('@/views/Contacts.vue'),
+    meta: { keepAlive: true },
   },
   {
     path: '/chat/:id',
@@ -36,6 +38,7 @@ const routes = [
     path: '/profile',
     name: 'Profile',
     component: () => import('@/views/Profile.vue'),
+    meta: { keepAlive: true },
   },
 ];
 

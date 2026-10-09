@@ -278,7 +278,7 @@ async function main() {
         const targetUid = sockets[randomIdx]?.uid;
         if (targetUid && targetUid !== uid) {
           socket.emit('send_message', {
-            to_uid: targetUid,
+            toUid: targetUid,
             type: 1,
             content: `[用户${idx}] 私聊 ${Date.now()}`,
           }, (res) => {

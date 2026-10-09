@@ -71,10 +71,8 @@ const saving = ref(false);
 
 async function loadSettings() {
   try {
-    const res = await getSystemSettings();
-    if (res.code === 0) {
-      form.value = { ...form.value, ...res.data };
-    }
+    const data = await getSystemSettings();
+    form.value = { ...form.value, ...data };
   } catch (e) {
     ElMessage.error('加载失败');
   }
@@ -98,15 +96,11 @@ async function uploadLogo(options) {
   try {
     const formData = new FormData();
     formData.append('file', options.file);
-    const res = await uploadFile('avatar', formData);
-    if (res.code === 0) {
-      form.value.app_logo = res.data.url;
-      ElMessage.success('上传成功');
-    } else {
-      ElMessage.error(res.message || '上传失败');
-    }
+    const data = await uploadFile('avatar', formData);
+    form.value.app_logo = data.url;
+    ElMessage.success('上传成功');
   } catch (e) {
-    ElMessage.error('上传失败');
+    ElMessage.error(e?.message || '上传失败');
   }
 }
 
@@ -121,18 +115,14 @@ async function handleSave() {
   }
   saving.value = true;
   try {
-    const res = await updateSystemSettings({
+    await updateSystemSettings({
       app_name: form.value.app_name.trim(),
       app_logo: form.value.app_logo,
       app_description: form.value.app_description.trim(),
     });
-    if (res.code === 0) {
-      ElMessage.success('保存成功');
-    } else {
-      ElMessage.error(res.message || '保存失败');
-    }
+    ElMessage.success('保存成功');
   } catch (e) {
-    ElMessage.error('保存失败');
+    ElMessage.error(e?.message || '保存失败');
   } finally {
     saving.value = false;
   }

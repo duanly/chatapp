@@ -18,7 +18,7 @@
       <el-table :data="list" v-loading="loading" border stripe>
         <el-table-column label="头像" width="72">
           <template #default="{ row }">
-            <el-avatar :size="36" :src="row.avatar || defaultAvatar" style="background: #f0f0f0" />
+            <el-avatar :size="36" :src="getAvatar(row.avatar, row.nickname)" />
           </template>
         </el-table-column>
         <el-table-column prop="nickname" label="昵称" width="120" show-overflow-tooltip />
@@ -35,21 +35,49 @@
           </template>
         </el-table-column>
         <el-table-column prop="short_no" label="短号" width="100" />
+        <el-table-column label="绑定设备" width="180">
+          <template #default="{ row }">
+            <template v-if="row.device_id">
+              <span style="font-family: monospace; font-size: 12px" :title="row.device_id">
+                {{ maskDeviceId(row.device_id) }}
+              </span>
+              <el-button
+                type="primary"
+                link
+                size="small"
+                @click.stop="copyDeviceId(row.device_id)"
+                style="margin-left: 4px"
+              >复制</el-button>
+            </template>
+            <span v-else style="color: #999">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag v-if="row.status === 1" type="danger" size="small">已封禁</el-tag>
             <el-tag v-else type="success" size="small">正常</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="设备锁" width="90">
+        <el-table-column label="设备锁" width="100" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.device_lock" type="warning" size="small">已开启</el-tag>
-            <el-tag v-else type="info" size="small">未开启</el-tag>
+            <el-switch
+              :model-value="row.device_lock"
+              :loading="row._lockLoading"
+              size="small"
+              @change="(val) => toggleDeviceLock(row, val)"
+            />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" plain @click="openDetail(row)">详情</el-button>
+            <el-button
+              v-if="row.device_lock && row.device_id"
+              size="small"
+              type="warning"
+              plain
+              @click="onClearDevice(row)"
+            >清空设备</el-button>
             <el-button
               v-if="row.status === 1"
               size="small"
@@ -81,7 +109,7 @@
     <el-dialog v-model="detailDialogVisible" title="用户详情" width="560px" top="8vh">
       <div v-loading="detailLoading" class="user-detail">
         <div class="detail-header">
-          <el-avatar :size="64" :src="detailUser?.avatar || defaultAvatar" style="background: #f0f0f0" />
+          <el-avatar :size="64" :src="getAvatar(detailUser?.avatar, detailUser?.nickname)" />
           <div class="detail-basic">
             <div class="detail-nickname">{{ detailUser?.nickname || '-' }}</div>
             <div class="detail-sub">
@@ -243,8 +271,9 @@ import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   getUserList, setUserStatus, importTsddUsers, createUser, batchCreateUsers,
-  getUserDetail, updateUserRemark, setUserPublic, setUserDeviceLock
+  getUserDetail, updateUserRemark, setUserPublic, setUserDeviceLock, clearUserDevice
 } from '@/api';
+import { getAvatar } from '@/utils/avatar';
 
 const loading = ref(false);
 const list = ref([]);
@@ -253,7 +282,10 @@ const page = ref(1);
 const pageSize = ref(20);
 const keyword = ref('');
 
-const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjZTBlMGUwIiByeD0iOCIvPjx0ZXh0IHg9IjI0IiB5PSIzMCIgZm9udC1zaXplPSIyMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk5OSI+77iXPC90ZXh0Pjwvc3ZnPg==';
+// 头像：有图用图，无图用文字头像
+function userAvatar(row) {
+  return getAvatar(row?.avatar, row?.nickname);
+}
 
 // 详情弹窗
 const detailDialogVisible = ref(false);
@@ -299,6 +331,68 @@ function copyUid(uid) {
     document.body.removeChild(textarea);
     ElMessage.success('UID 已复制');
   });
+}
+
+// 设备ID 脱敏：前6后4
+function maskDeviceId(id) {
+  if (!id) return '-';
+  if (id.length <= 10) return id;
+  return id.slice(0, 6) + '***' + id.slice(-4);
+}
+
+// 复制设备ID
+function copyDeviceId(id) {
+  if (!id) return;
+  navigator.clipboard.writeText(id).then(() => {
+    ElMessage.success('设备ID已复制');
+  }).catch(() => {
+    const textarea = document.createElement('textarea');
+    textarea.value = id;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    ElMessage.success('设备ID已复制');
+  });
+}
+
+// 列表上开关设备锁
+async function toggleDeviceLock(row, val) {
+  row._lockLoading = true;
+  try {
+    await setUserDeviceLock(row.uid, val);
+    row.device_lock = val;
+    if (!val) {
+      row.device_id = '';
+    }
+    ElMessage.success(val ? '设备锁已开启' : '设备锁已关闭');
+  } catch (e) {
+    // 失败回滚
+    row.device_lock = !val;
+    ElMessage.error(e.message || '操作失败');
+  } finally {
+    row._lockLoading = false;
+  }
+}
+
+// 清空设备
+async function onClearDevice(row) {
+  try {
+    await ElMessageBox.confirm(
+      '确定清空该用户的绑定设备？清空后用户可以在新设备上登录。',
+      '清空设备',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    );
+  } catch {
+    return;
+  }
+  try {
+    await clearUserDevice(row.uid);
+    row.device_id = '';
+    ElMessage.success('已清空绑定设备');
+  } catch (e) {
+    ElMessage.error(e.message || '操作失败');
+  }
 }
 
 function formatTime(t) {

@@ -97,6 +97,18 @@ async function setDeviceLock(req, res) {
   res.json({ code: 0, message: '操作成功', data: user });
 }
 
+// 清空用户绑定的设备（不清设备锁，只清 device_id）
+async function clearDevice(req, res) {
+  const { uid } = req.params;
+
+  const user = await userModel.update(uid, { deviceId: '' });
+  if (!user) {
+    return res.json({ code: 404, message: '用户不存在' });
+  }
+
+  res.json({ code: 0, message: '已清空绑定设备', data: user });
+}
+
 // 更新用户备注
 async function updateUserRemark(req, res) {
   const { uid } = req.params;
@@ -264,6 +276,32 @@ async function createGroup(req, res) {
     code: 0,
     message: '创建成功',
     data: group,
+  });
+}
+
+// 更新群信息（名称、头像）
+async function updateGroup(req, res) {
+  const { id } = req.params;
+  const { name, avatar } = req.body;
+
+  const group = await groupModel.getById(id);
+  if (!group) {
+    return res.json({ code: 404, message: '群不存在' });
+  }
+
+  const updateData = {};
+  if (name !== undefined && name.trim()) updateData.name = name.trim();
+  if (avatar !== undefined) updateData.avatar = avatar;
+
+  if (Object.keys(updateData).length === 0) {
+    return res.json({ code: 400, message: '没有需要更新的字段' });
+  }
+
+  const updated = await groupModel.update(id, updateData);
+  res.json({
+    code: 0,
+    message: '更新成功',
+    data: updated,
   });
 }
 
@@ -467,8 +505,10 @@ module.exports = {
   setUserStatus,
   setUserPublic,
   setDeviceLock,
+  clearDevice,
   groupList,
   createGroup,
+  updateGroup,
   setGroupStatus,
   setGroupPublic,
   disbandGroup,

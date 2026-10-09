@@ -1,9 +1,9 @@
 import axios from 'axios';
-import { showToast } from 'vant';
+import { showToast } from '@/utils/toast';
 
 const service = axios.create({
   baseURL: '/api/v1',
-  timeout: 15000,
+  timeout: 60000, // 60秒超时（上传图片需要更长时间）
 });
 
 // 请求拦截

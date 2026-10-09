@@ -34,7 +34,22 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="content" label="内容" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="content" label="内容" min-width="200">
+        <template #default="{ row }">
+          <div v-if="row.type === 2" class="msg-content-img-wrap">
+            <el-image
+              :src="row.content"
+              :preview-src-list="[row.content]"
+              fit="cover"
+              style="width: 40px; height: 40px; border-radius: 4px; cursor: pointer"
+            />
+            <span style="margin-left: 8px; color: #999; font-size: 12px">[图片]</span>
+          </div>
+          <div v-else style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+            {{ row.content }}
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column prop="created_at" label="时间" width="180" />
     </el-table>
 

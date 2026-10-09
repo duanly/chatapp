@@ -1,5 +1,11 @@
 <template>
-  <router-view />
+  <router-view v-slot="{ Component, route }">
+    <transition name="fade" mode="out-in">
+      <keep-alive :include="['Home', 'Contacts', 'Profile', 'GroupInfo']" :max="10">
+        <component :is="Component" :key="route.fullPath" />
+      </keep-alive>
+    </transition>
+  </router-view>
 </template>
 
 <script setup>
@@ -67,3 +73,15 @@ onMounted(() => {
   loadAppSettings();
 });
 </script>
+
+<style>
+/* 页面切换淡入淡出 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

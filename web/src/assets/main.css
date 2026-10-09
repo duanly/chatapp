@@ -39,6 +39,17 @@ input, textarea {
   --van-nav-bar-title-text-color: #111;
   --van-tabbar-background: #f7f7f7;
   --van-tabbar-item-active-color: #07c160;
+
+  /* Tabbar 放大 50% */
+  --van-tabbar-height: 75px;
+  --van-tabbar-item-font-size: 13px;
+  --van-tabbar-item-icon-size: 30px;
+
+  /* NavBar 放大 50% */
+  --van-nav-bar-height: 68px;
+  --van-nav-bar-title-font-size: 20px;
+  --van-nav-bar-text-font-size: 17px;
+  --van-nav-bar-icon-font-size: 26px;
 }
 
 /* 滚动条 */
@@ -49,4 +60,107 @@ input, textarea {
 ::-webkit-scrollbar-thumb {
   background: #ccc;
   border-radius: 2px;
+}
+
+/* ====== PC 端适配：最大宽度居中，模拟手机端体验 ====== */
+@media (min-width: 768px) {
+  html, body, #app {
+    background: #f0f0f0;
+  }
+
+  #app {
+    max-width: 560px;
+    margin: 0 auto;
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+    background: #ededed;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Vant 固定导航栏：限制宽度并居中 */
+  #app .van-nav-bar--fixed {
+    max-width: 560px;
+    left: 50% !important;
+    transform: translateX(-50%);
+    right: auto !important;
+  }
+
+  /* 固定定位的 tabbar：限制宽度并居中 */
+  #app .van-tabbar--fixed {
+    max-width: 560px;
+    left: 50% !important;
+    transform: translateX(-50%);
+    right: auto !important;
+  }
+
+  /* 聊天页输入框：限制宽度并居中 */
+  #app .input-bar {
+    max-width: 560px;
+    left: 50% !important;
+    transform: translateX(-50%);
+    right: auto !important;
+  }
+
+  /* 聊天页 @ 悬浮按钮：调整位置 */
+  #app .mention-float-btn {
+    right: calc(50% - 280px + 12px) !important;
+  }
+
+  /* 聊天页快捷按钮：跟随容器 */
+  #app .quick-btns {
+    right: calc(50% - 280px + 16px) !important;
+  }
+
+  /* 表情面板：限制宽度 */
+  #app .emoji-panel {
+    max-width: 560px;
+    left: 50% !important;
+    transform: translateX(-50%);
+    right: auto !important;
+  }
+
+  /* 联系人页搜索框：限制宽度并居中 */
+  #app .search-wrap {
+    max-width: 560px;
+    left: 50% !important;
+    transform: translateX(-50%);
+    right: auto !important;
+  }
+}
+
+/* ====== 双账号模式：#app 全屏，不限制宽度 ====== */
+@media (min-width: 768px) {
+  body.dual-mode,
+  body.dual-mode #app {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    background: #e8e8e8 !important;
+  }
+}
+
+/* ====== 统一 Toast 样式 ====== */
+.app-toast {
+  background: #fff !important;
+  color: #111 !important;
+  border: 1px solid #e0e0e0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12) !important;
+  font-size: 14px !important;
+  padding: 12px 20px !important;
+  max-width: 80% !important;
+  line-height: 1.5 !important;
+  word-break: break-all !important;
+}
+
+.app-toast .van-toast__icon {
+  font-size: 36px !important;
+  margin-bottom: 8px !important;
+}
+
+.app-toast-loading {
+  min-width: 120px !important;
+  padding: 24px !important;
 }

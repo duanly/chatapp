@@ -48,6 +48,8 @@ export const useUserStore = defineStore('user', {
       // 清除未读数缓存
       localStorage.removeItem('unread_map');
       localStorage.removeItem('mention_map');
+      // 清除已清空会话标记
+      localStorage.removeItem('cleared_map');
 
       this.token = '';
       this.userInfo = null;

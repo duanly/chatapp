@@ -1,6 +1,10 @@
 FROM node:18-alpine AS build
 ARG VITE_BASE_PATH=/
 WORKDIR /app
+
+# 国内服务器可取消注释加速 npm 安装
+# RUN npm config set registry https://registry.npmmirror.com
+
 COPY package*.json ./
 RUN npm ci
 COPY . .

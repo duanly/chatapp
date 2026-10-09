@@ -5,7 +5,7 @@
     <div class="profile">
       <div class="user-card" @click="onAvatarClick">
         <van-image
-          :src="userInfo?.avatar || defaultAvatar"
+          :src="getAvatar(userInfo?.avatar, userInfo?.nickname)"
           round
           width="60px"
           height="60px"
@@ -35,6 +35,10 @@
             <van-switch v-model="floatBtnEnabled" size="20" />
           </template>
         </van-cell>
+        <!-- PC 端双账号模式 -->
+        <van-cell v-if="isPC" title="双账号模式" is-link @click="openDualMode">
+          <template #label>一个窗口并排登录两个账号</template>
+        </van-cell>
       </van-cell-group>
 
       <van-cell-group inset style="margin-top: 12px">
@@ -42,10 +46,10 @@
       </van-cell-group>
     </div>
 
-    <van-tabbar v-model="active" active-color="#07c160">
-      <van-tabbar-item icon="chat-o" @click="$router.push('/')">消息</van-tabbar-item>
-      <van-tabbar-item icon="friends-o" @click="$router.push('/contacts')">联系人</van-tabbar-item>
-      <van-tabbar-item icon="user-o">我的</van-tabbar-item>
+    <van-tabbar route active-color="#07c160">
+      <van-tabbar-item icon="chat-o" to="/">消息</van-tabbar-item>
+      <van-tabbar-item icon="friends-o" to="/contacts">联系人</van-tabbar-item>
+      <van-tabbar-item icon="user-o" to="/profile">我的</van-tabbar-item>
     </van-tabbar>
 
     <van-dialog
@@ -62,7 +66,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { showToast, showDialog, showLoadingToast, closeToast } from 'vant';
+import { showDialog } from 'vant';
+import 'vant/es/dialog/style';
+import { showToast, showLoadingToast, closeToast } from '@/utils/toast';
+import { getAvatar } from '@/utils/avatar';
 import { updateUserInfo, getUserInfo as fetchUserInfo } from '@/api/user';
 import { uploadFile } from '@/api/upload';
 import { useUserStore } from '@/store/user';
@@ -72,18 +79,29 @@ const router = useRouter();
 const userStore = useUserStore();
 const socketStore = useSocketStore();
 
+defineOptions({ name: 'Profile' });
+
 const active = ref(2);
 const userInfo = computed(() => userStore.userInfo);
 const showNicknameDialog = ref(false);
 const newNickname = ref('');
 const avatarInput = ref(null);
-const defaultAvatar = '/avatars/cat.svg';
+
 
 // 快捷浮窗开关
 const floatBtnEnabled = ref(localStorage.getItem('float_btn_enabled') !== 'false');
 watch(floatBtnEnabled, (val) => {
   localStorage.setItem('float_btn_enabled', val ? 'true' : 'false');
 });
+
+// 是否 PC 端（宽屏）
+const isPC = ref(window.innerWidth >= 1000);
+
+// 开启双账号模式
+function openDualMode() {
+  localStorage.setItem('dual_mode', '1');
+  window.location.reload();
+}
 
 function onAvatarClick() {
   avatarInput.value?.click();
@@ -161,8 +179,8 @@ onMounted(async () => {
   min-height: 100vh;
   min-height: 100dvh;
   background: #ededed;
-  padding-top: 46px;
-  padding-bottom: 56px;
+  padding-top: 68px;
+  padding-bottom: 75px;
   box-sizing: border-box;
 }
 
